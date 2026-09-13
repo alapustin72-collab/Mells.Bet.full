@@ -1,0 +1,3739 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mells.Bet</title>
+<!-- SPWorlds Mini App requirement: only spworlds.ru may embed this site in
+     an iframe. The frame-ancestors CSP directive does NOT work when set
+     via a <meta> tag (browsers ignore it there per spec) — it has to be a
+     real HTTP response header, which server.js now sets on every
+     response. This tag was previously here doing nothing; removed rather
+     than left in as misleading dead weight. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#151517;
+    --bg-2:#1b1b1e;
+    --surface:#212124;
+    --surface-2:#28282c;
+    --line:#333338;
+    --purple:#822eff;
+    --purple-light:#9b5cff;
+    --purple-dim:rgba(130,46,255,.18);
+    --text:#f4f4f5;
+    --text-dim:#96969e;
+    --red:#c0392b;
+    --red-light:#d9483a;
+    --black:#1a1a1a;
+    --green:#2f8f5b;
+    --blue:#2563eb;
+    --blue-light:#3b82f6;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    min-height:100vh;
+    background:
+      radial-gradient(ellipse at 50% -10%, #202024 0%, var(--bg) 55%, #0d0d0e 100%);
+    font-family:'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    color:var(--text);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding:24px 12px 60px;
+    position:relative;
+    overflow-x:hidden;
+  }
+
+  h1{
+    font-weight:800;
+    letter-spacing:2px;
+    font-size:22px;
+    color:#ffffff;
+    margin:6px 0 22px;
+  }
+
+  #rouletteGame, #baccaratGame, #minesGame{
+    display:contents;
+  }
+  h1 span{color:var(--purple-light);}
+  #soundToggleBtn{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:10px;
+    width:34px; height:34px;
+    font-size:15px;
+    line-height:1;
+    cursor:pointer;
+    vertical-align:middle;
+    margin-left:8px;
+    transition:border-color .15s, transform .15s;
+  }
+  #soundToggleBtn:hover{border-color:var(--purple); transform:translateY(-1px);}
+  #soundToggleBtn.muted{opacity:.5;}
+
+  /* Balance */
+  #balanceBox{
+    position:fixed;
+    top:16px;
+    right:16px;
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:10px 18px;
+    text-align:right;
+    box-shadow:0 6px 20px rgba(0,0,0,.4);
+    z-index:50;
+  }
+  #balanceBox .label{
+    font-size:10px;
+    font-weight:600;
+    letter-spacing:1.5px;
+    text-transform:uppercase;
+    color:var(--text-dim);
+  }
+  #balanceBox .amount{
+    font-size:20px;
+    font-weight:700;
+    color:var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Left panel: bets in round */
+  /* Game mode sidebar */
+  #modeSidebar{
+    position:fixed;
+    top:60%;
+    left:16px;
+    transform:translateY(-50%);
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    z-index:40;
+  }
+  .mode-btn{
+    width:60px;
+    background:transparent;
+    border:none;
+    cursor:pointer;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:5px;
+    padding:8px 4px;
+    border-radius:14px;
+    transition:transform .15s cubic-bezier(.2,.8,.3,1.3), background .15s;
+  }
+  .mode-btn:hover{transform:translateY(-2px);}
+  .mode-btn .mode-icon{
+    width:44px; height:44px;
+    border-radius:13px;
+    background:var(--surface);
+    border:1px solid var(--line);
+    display:flex; align-items:center; justify-content:center;
+    font-size:21px;
+    transition:border-color .15s, transform .15s cubic-bezier(.2,.8,.3,1.3), box-shadow .15s;
+  }
+  .mode-btn .mode-label{
+    font-size:9px;
+    color:var(--text-dim);
+    text-align:center;
+    letter-spacing:.3px;
+    transition:color .15s;
+  }
+  .mode-btn:hover .mode-icon{border-color:var(--purple); transform:scale(1.08);}
+  .mode-btn.active{background:rgba(0,0,0,.35);}
+  .mode-btn.active .mode-icon{
+    background:var(--purple-dim);
+    border-color:var(--purple);
+    box-shadow:0 0 14px rgba(130,46,255,.4);
+    transform:scale(1.05);
+  }
+  .mode-btn.active .mode-label{color:var(--purple-light); font-weight:700;}
+
+  #modeToast{
+    position:fixed;
+    left:88px;
+    top:50%;
+    transform:translateY(-50%) translateX(-8px);
+    background:var(--surface);
+    border:1px solid var(--purple);
+    border-radius:10px;
+    padding:10px 16px;
+    font-size:13px;
+    color:var(--text);
+    box-shadow:0 8px 24px rgba(0,0,0,.5);
+    opacity:0;
+    pointer-events:none;
+    transition:.2s;
+    z-index:45;
+  }
+  #modeToast.show{opacity:1; transform:translateY(-50%) translateX(0);}
+
+  /* Win popup: big green banner that pops in the center on any win */
+  #winPopup{
+    position:fixed;
+    top:50%; left:50%;
+    transform:translate(-50%,-50%) scale(.7);
+    background:linear-gradient(160deg, #2fb968, #1f8f4f);
+    border:1px solid #3fd67d;
+    border-radius:18px;
+    padding:22px 46px;
+    text-align:center;
+    box-shadow:0 20px 60px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.05) inset, 0 0 40px rgba(63,214,125,.35);
+    opacity:0;
+    pointer-events:none;
+    z-index:200;
+  }
+  #winPopup.show{
+    animation:win-pop-in .45s cubic-bezier(.2,1.4,.4,1) forwards, win-pop-out .5s ease-in 1.9s forwards;
+  }
+  #winPopup .win-label{
+    font-size:11px;
+    font-weight:700;
+    letter-spacing:2px;
+    text-transform:uppercase;
+    color:rgba(255,255,255,.8);
+    margin-bottom:4px;
+  }
+  #winPopup .win-amount{
+    font-size:42px;
+    font-weight:800;
+    color:#fff;
+    text-shadow:0 2px 10px rgba(0,0,0,.3);
+    font-variant-numeric: tabular-nums;
+    white-space:nowrap;
+  }
+  #winPopup .win-mode{
+    margin-top:6px;
+    font-size:11px;
+    font-weight:600;
+    letter-spacing:.5px;
+    color:rgba(255,255,255,.75);
+  }
+  @keyframes win-pop-in{
+    0%{ opacity:0; transform:translate(-50%,-50%) scale(.6); }
+    60%{ opacity:1; transform:translate(-50%,-50%) scale(1.06); }
+    100%{ opacity:1; transform:translate(-50%,-50%) scale(1); }
+  }
+  @keyframes win-pop-out{
+    0%{ opacity:1; transform:translate(-50%,-50%) scale(1); }
+    100%{ opacity:0; transform:translate(-50%,-50%) scale(.9); }
+  }
+  /* Wheel */
+  #wheelWrap{
+    position:relative;
+    width:460px;
+    height:460px;
+    margin-top:10px;
+  }
+  #wheelRing{
+    position:absolute;
+    inset:-20px;
+    border-radius:50%;
+    background:var(--surface-2);
+    box-shadow: inset 0 0 0 4px var(--purple), 0 10px 34px rgba(0,0,0,.55);
+  }
+  #wheel{
+    position:absolute;
+    inset:0;
+    border-radius:50%;
+    transform:rotate(0deg);
+    box-shadow: inset 0 0 0 3px #000, 0 8px 22px rgba(0,0,0,.5);
+  }
+  .pocket{
+    position:absolute;
+    inset:0;
+    display:flex;
+    justify-content:center;
+  }
+  .pocket .num{
+    margin-top:10px;
+    font-size:15px;
+    font-weight:700;
+    color:#ffffff;
+    width:24px;
+    text-align:center;
+    text-shadow:0 1px 3px rgba(0,0,0,.8);
+  }
+  .pin{
+    position:absolute;
+    inset:0;
+    display:flex;
+    justify-content:center;
+  }
+  .pin i{
+    margin-top:4px;
+    width:5px;
+    height:5px;
+    border-radius:50%;
+    background:#e6e6ea;
+    box-shadow:0 0 3px rgba(0,0,0,.6);
+  }
+  #hub{
+    position:absolute;
+    top:50%;left:50%;
+    width:78px;height:78px;
+    transform:translate(-50%,-50%);
+    border-radius:50%;
+    background:var(--surface);
+    border:2px solid var(--purple);
+    box-shadow:0 0 18px rgba(130,46,255,.45), inset 0 0 10px rgba(0,0,0,.5);
+    z-index:5;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  #hubIcon{
+    font-size:22px;
+    color:var(--purple-light);
+    text-shadow:0 0 10px rgba(130,46,255,.65);
+    user-select:none;
+  }
+
+  /* Pointer */
+  #pointer{
+    position:absolute;
+    top:-4px;
+    left:50%;
+    transform:translateX(-50%);
+    width:0; height:0;
+    border-left:13px solid transparent;
+    border-right:13px solid transparent;
+    border-top:24px solid var(--purple);
+    filter:drop-shadow(0 3px 6px rgba(130,46,255,.5));
+    z-index:10;
+    transform-origin:50% 0%;
+  }
+  #pointer.shake{
+    animation: shake .12s ease-out;
+  }
+  @keyframes shake{
+    0%{transform:translateX(-50%) rotate(0deg);}
+    30%{transform:translateX(-50%) rotate(-9deg);}
+    65%{transform:translateX(-50%) rotate(6deg);}
+    100%{transform:translateX(-50%) rotate(0deg);}
+  }
+
+  #result, #baccResult, #bjResult{
+    margin-top:18px;
+    min-height:44px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:10px;
+    font-size:14px;
+  }
+  #resultNum{
+    width:36px;height:36px;
+    border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    font-weight:700;
+    border:2px solid var(--purple);
+    display:none;
+  }
+  #resultText, #baccResultText, #bjResultText{color:var(--text-dim);}
+  #resultText.loss, #baccResultText.loss, #bjResultText.loss{color:var(--red); font-weight:700;}
+
+  #history, #baccHistory{
+    display:flex;
+    gap:6px;
+    margin-top:8px;
+    flex-wrap:wrap;
+    justify-content:center;
+    max-width:500px;
+  }
+  .hist-chip{
+    width:24px;height:24px;
+    border-radius:50%;
+    font-size:11px;
+    display:flex;align-items:center;justify-content:center;
+    font-weight:700;
+    border:1px solid rgba(255,255,255,.12);
+  }
+
+  /* Baccarat table felt + cards */
+  #baccTableFelt{
+    margin-top:18px;
+    display:flex;
+    flex-direction:row;
+    gap:36px;
+    align-items:flex-start;
+    justify-content:center;
+    flex-wrap:wrap;
+  }
+  .bacc-hand{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:8px;
+  }
+  .bacc-hand-label{
+    font-size:12px;
+    font-weight:700;
+    letter-spacing:1px;
+    text-transform:uppercase;
+    color:var(--text-dim);
+  }
+  .bacc-label-player{color:var(--blue-light);}
+  .bacc-label-banker{color:var(--red-light);}
+  .bacc-hand-label span{
+    font-size:16px;
+    margin-left:6px;
+    color:inherit;
+  }
+  .bacc-cards{
+    display:flex;
+    gap:8px;
+    min-height:84px;
+  }
+  .bacc-card{
+    width:56px;height:80px;
+    border-radius:8px;
+    background:#fff;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    font-weight:800;
+    font-size:20px;
+    box-shadow:0 4px 14px rgba(0,0,0,.4);
+    animation:bacc-deal .35s cubic-bezier(.2,.8,.3,1.1);
+    transform-style:preserve-3d;
+  }
+  .bacc-card.red{color:var(--red);}
+  .bacc-card.black{color:#1a1a1a;}
+  .bacc-card.back{
+    background:linear-gradient(135deg, var(--purple) 0%, #4a1a8a 100%);
+    box-shadow:0 4px 14px rgba(0,0,0,.4), inset 0 0 0 3px rgba(255,255,255,.12);
+    position:relative;
+    overflow:hidden;
+  }
+  .bacc-card.back::after{
+    content:'';
+    position:absolute;
+    inset:6px;
+    border:1.5px solid rgba(255,255,255,.25);
+    border-radius:5px;
+    background:repeating-linear-gradient(45deg, rgba(255,255,255,.06) 0 6px, transparent 6px 12px);
+  }
+  @keyframes bacc-deal{
+    from{ transform:translateY(-24px) rotateY(90deg) scale(.85); opacity:0; }
+    60%{ opacity:1; }
+    to{ transform:translateY(0) rotateY(0) scale(1); opacity:1; }
+  }
+
+  /* Blackjack table felt + cards — dealer above, player below, same card
+     visual language as Baccarat but its own classes (different layout:
+     a vertical stack, not two side-by-side hands). */
+  #bjTableFelt{
+    margin-top:18px;
+    display:flex;
+    flex-direction:column;
+    gap:34px;
+    align-items:center;
+  }
+  .bj-hand{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:8px;
+    padding:10px 14px;
+    border-radius:14px;
+    border:2px solid transparent;
+    transition:border-color .2s, box-shadow .2s;
+  }
+  #bjPlayerHandsRow{
+    display:flex;
+    gap:22px;
+    flex-wrap:wrap;
+    justify-content:center;
+  }
+  .bj-hand.active-hand{
+    border-color:var(--purple);
+    box-shadow:0 0 22px rgba(130,46,255,.35);
+    background:rgba(130,46,255,.06);
+  }
+  .bj-hand-outcome{
+    font-size:11px;
+    font-weight:700;
+    letter-spacing:.5px;
+    padding:2px 10px;
+    border-radius:20px;
+  }
+  .bj-hand-outcome.win{background:rgba(47,168,79,.2); color:#3fd67d;}
+  .bj-hand-outcome.lose{background:rgba(192,57,43,.2); color:#ff6b6b;}
+  .bj-hand-outcome.push{background:rgba(255,255,255,.1); color:var(--text-dim);}
+  .bj-hand-label{
+    font-size:12px;
+    font-weight:700;
+    letter-spacing:1px;
+    text-transform:uppercase;
+    color:var(--text-dim);
+  }
+  .bj-label-player{color:var(--blue-light);}
+  .bj-label-dealer{color:var(--red-light);}
+  .bj-hand-label span{
+    font-size:16px;
+    margin-left:6px;
+    color:inherit;
+  }
+  .bj-cards{
+    display:flex;
+    gap:8px;
+    min-height:84px;
+    flex-wrap:wrap;
+    justify-content:center;
+  }
+  .bj-card{
+    width:56px;height:80px;
+    border-radius:8px;
+    background:#fff;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    font-weight:800;
+    font-size:20px;
+    box-shadow:0 4px 14px rgba(0,0,0,.4);
+    animation:bacc-deal .35s cubic-bezier(.2,.8,.3,1.1);
+    transform-style:preserve-3d;
+  }
+  .bj-card.red{color:var(--red);}
+  .bj-card.black{color:#1a1a1a;}
+  .bj-card.back{
+    background:linear-gradient(135deg, var(--purple) 0%, #4a1a8a 100%);
+    box-shadow:0 4px 14px rgba(0,0,0,.4), inset 0 0 0 3px rgba(255,255,255,.12);
+    position:relative;
+    overflow:hidden;
+  }
+  .bj-card.back::after{
+    content:'';
+    position:absolute;
+    inset:6px;
+    border:1.5px solid rgba(255,255,255,.25);
+    border-radius:5px;
+    background:repeating-linear-gradient(45deg, rgba(255,255,255,.06) 0 6px, transparent 6px 12px);
+  }
+  .bj-card.bust{ box-shadow:0 4px 14px rgba(192,57,43,.5), inset 0 0 0 2px var(--red); }
+
+  #bjResult{margin-top:16px; text-align:center;}
+  #bjHitBtn, #bjDoubleBtn{
+    background:linear-gradient(160deg, var(--purple), #5c1cc4);
+    border-color:var(--purple);
+    color:#fff;
+  }
+  #bjHitBtn:hover, #bjDoubleBtn:hover{
+    background:linear-gradient(160deg, #9550ff, var(--purple));
+  }
+  #bjStandBtn{
+    background:linear-gradient(160deg, #2fb968, #1f8f4f);
+    color:#fff;
+    box-shadow:0 6px 18px rgba(47,168,79,.35);
+  }
+  #bjStandBtn:hover{
+    background:linear-gradient(160deg, #3fd67d, #2fb968);
+  }
+
+  #baccBetRow{
+    display:flex;
+    gap:10px;
+    margin-top:18px;
+  }
+  .bacc-bet-cell{
+    position:relative;
+    width:150px;
+    padding:20px 12px;
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:14px;
+    cursor:pointer;
+    color:#fff;
+    font-family:inherit;
+    text-align:center;
+    transition:border-color .18s, box-shadow .18s, transform .15s cubic-bezier(.2,.8,.3,1.3);
+  }
+  .bacc-bet-cell:hover{transform:translateY(-4px) scale(1.03); box-shadow:0 12px 26px rgba(0,0,0,.35);}
+  .bacc-bet-cell:active{transform:translateY(-1px) scale(.98);}
+  .bacc-bet-cell.hover-win{outline:2px solid #fff; box-shadow:0 0 16px 3px rgba(255,255,255,.45);}
+  .bacc-bet-name{font-weight:800; font-size:15px; margin-bottom:5px; letter-spacing:.3px;}
+  .bacc-bet-odds{font-size:12px; opacity:.85;}
+  .bacc-bet-player{background:var(--blue); border-color:var(--blue-light);}
+  .bacc-bet-player:hover{border-color:#fff; background:var(--blue-light);}
+  .bacc-bet-banker{background:var(--red); border-color:var(--red-light);}
+  .bacc-bet-banker:hover{border-color:#fff; background:var(--red-light);}
+  .bacc-bet-tie{background:var(--green); border-color:#3fae76;}
+  .bacc-bet-tie:hover{border-color:#fff; background:#3fae76;}
+  .bacc-bet-cell .chip-badge{
+    position:absolute;
+    top:-10px; right:-10px;
+  }
+
+  /* Mines */
+  #minesTopRow{
+    display:flex;
+    gap:14px;
+    margin-top:18px;
+  }
+  #minesMultiplierBox, #minesPotentialBox{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:10px 20px;
+    text-align:center;
+    min-width:140px;
+  }
+  #minesMultiplierBox .label, #minesPotentialBox .label{
+    font-size:10px;
+    font-weight:600;
+    letter-spacing:1px;
+    text-transform:uppercase;
+    color:var(--text-dim);
+    margin-bottom:4px;
+  }
+  #minesMultiplierVal{font-size:20px; font-weight:800; color:var(--purple-light);}
+  #minesPotentialVal{font-size:20px; font-weight:800; color:#2fa84f;}
+
+  #minesGrid{
+    margin-top:20px;
+    display:grid;
+    grid-template-columns:repeat(5, 64px);
+    grid-template-rows:repeat(5, 64px);
+    gap:8px;
+  }
+  #minesGrid.grid-locked{
+    pointer-events:none;
+  }
+  .mines-tile{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:10px;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:24px;
+    transition:background .12s, border-color .12s, transform .08s;
+    will-change:transform;
+  }
+  .mines-tile:hover:not(.revealed):not(.mine-hit){
+    border-color:var(--purple);
+    transform:translateY(-2px);
+  }
+  .mines-tile.revealed{
+    background:rgba(47,168,79,.18);
+    border-color:#2fa84f;
+    animation:mines-flip .22s ease-out;
+  }
+  .mines-tile.mine-hit{
+    background:rgba(192,57,43,.25);
+    border-color:var(--red);
+    animation:mines-flip .22s ease-out;
+  }
+  .mines-tile.mine-dim{
+    opacity:.5;
+  }
+  .mines-tile.disabled{cursor:default;}
+  @keyframes mines-flip{
+    from{ transform:scale(.85); opacity:0; }
+    to{ transform:scale(1); opacity:1; }
+  }
+
+  /* Progress line: one step per safe tile, showing the multiplier each
+     step gives. Steps already revealed light up green; the very next
+     step (what revealing one more tile would pay) is highlighted and
+     pulses so it stands out. Square cells the same size as the mine
+     tiles, exactly 5 visible at a time and exactly as wide as the mine
+     grid above it — the track slides (auto-pages) to keep the next step
+     in view as the player advances. */
+  #minesProgressFrame{
+    margin-top:14px;
+    display:inline-block;
+    border:2px solid var(--purple);
+    border-radius:12px;
+    padding:8px;
+    box-shadow:0 0 14px rgba(130,46,255,.25);
+  }
+  #minesProgressViewport{
+    width:352px;
+    max-width:100%;
+    overflow:hidden;
+  }
+  #minesProgress{
+    display:flex;
+    gap:8px;
+    transition:transform .35s cubic-bezier(.22,.8,.28,1);
+  }
+  .mines-step{
+    flex:0 0 64px;
+    width:64px;
+    height:64px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    border-radius:10px;
+    background:var(--surface);
+    border:1px solid var(--line);
+    text-align:center;
+    font-size:12px;
+    font-weight:800;
+    color:var(--text-dim);
+    font-variant-numeric: tabular-nums;
+    transition:background .2s, border-color .2s, color .2s;
+  }
+  .mines-step.done{
+    background:rgba(47,168,79,.22);
+    border-color:#2fa84f;
+    color:#3fd67d;
+  }
+  .mines-step.next{
+    background:rgba(130,46,255,.2);
+    border-color:var(--purple);
+    color:var(--purple-light);
+    animation:mines-next-pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes mines-next-pulse{
+    0%,100%{ box-shadow:0 0 0 0 rgba(130,46,255,.5); }
+    50%{ box-shadow:0 0 0 5px rgba(130,46,255,0); }
+  }
+
+  #minesResult{
+    margin-top:16px;
+    min-height:24px;
+    font-size:14px;
+    color:var(--text-dim);
+    text-align:center;
+  }
+
+  #minesControls{
+    display:flex;
+    align-items:center;
+    gap:14px;
+    margin:18px 0 4px;
+    flex-wrap:wrap;
+    justify-content:center;
+  }
+  #minesStakeBox, #minesCountBox{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:8px 12px;
+  }
+  #minesStakeBox label, #minesCountBox label{
+    font-size:11px;
+    color:var(--text-dim);
+    font-weight:600;
+    letter-spacing:1px;
+    text-transform:uppercase;
+  }
+  #minesStakeInput{
+    width:70px;
+    background:var(--surface-2);
+    border:1px solid var(--line);
+    border-radius:6px;
+    color:var(--text);
+    font-size:14px;
+    font-weight:700;
+    padding:6px 8px;
+    font-family:inherit;
+  }
+  #minesStakeInput:focus{outline:1px solid var(--purple);}
+  #minesCountInput{
+    background:var(--surface-2);
+    border:1px solid var(--line);
+    border-radius:6px;
+    color:var(--text);
+    font-size:14px;
+    font-weight:700;
+    padding:6px 8px;
+    font-family:inherit;
+  }
+
+  /* Custom-styled "Мины" count dropdown, replacing the plain native
+     <select> (kept hidden in the DOM for the game logic to read/write). */
+  #minesCountCustom{ position:relative; }
+  #minesCountBtn{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    background:var(--surface-2);
+    border:1px solid var(--line);
+    border-radius:6px;
+    color:var(--text);
+    font-size:14px;
+    font-weight:700;
+    padding:6px 10px;
+    font-family:inherit;
+    cursor:pointer;
+    transition:border-color .15s, box-shadow .15s;
+  }
+  #minesCountBtn:hover{ border-color:var(--purple); }
+  #minesCountBtn:disabled{ opacity:.5; cursor:not-allowed; }
+  #minesCountBtn:disabled:hover{ border-color:var(--line); }
+  #minesCountCustom.open #minesCountBtn{
+    border-color:var(--purple);
+    box-shadow:0 0 0 3px var(--purple-dim);
+  }
+  #minesCountArrow{
+    color:var(--text-dim);
+    transition:transform .15s;
+    flex-shrink:0;
+  }
+  #minesCountCustom.open #minesCountArrow{ transform:rotate(180deg); color:var(--purple-light); }
+  #minesCountPanel{
+    display:none;
+    position:absolute;
+    top:calc(100% + 8px);
+    left:50%;
+    transform:translateX(-50%);
+    width:200px;
+    max-height:220px;
+    overflow-y:auto;
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:8px;
+    box-shadow:0 14px 32px rgba(0,0,0,.5);
+    z-index:40;
+    grid-template-columns:repeat(4, 1fr);
+    gap:6px;
+  }
+  #minesCountCustom.open #minesCountPanel{ display:grid; }
+  #minesCountPanel::-webkit-scrollbar{ width:6px; }
+  #minesCountPanel::-webkit-scrollbar-thumb{ background:var(--line); border-radius:6px; }
+  .mines-count-opt{
+    background:var(--surface-2);
+    border:1px solid var(--line);
+    border-radius:8px;
+    color:var(--text-dim);
+    font-size:13px;
+    font-weight:700;
+    padding:8px 0;
+    text-align:center;
+    cursor:pointer;
+    font-family:inherit;
+    transition:border-color .15s, color .15s, background .15s, transform .1s;
+  }
+  .mines-count-opt:hover{ border-color:var(--purple); color:var(--text); transform:translateY(-1px); }
+  .mines-count-opt.selected{
+    background:linear-gradient(160deg, var(--purple), #5c1cc4);
+    border-color:var(--purple-light);
+    color:#fff;
+  }
+
+  /* Controls */
+  #controls, #baccControls, #bjControls{
+    display:flex;
+    align-items:center;
+    gap:14px;
+    margin:22px 0 4px;
+    flex-wrap:wrap;
+    justify-content:center;
+  }
+  #stakeBox, #baccStakeBox, #bjStakeBox{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:8px 12px;
+  }
+  #stakeBox label, #baccStakeBox label, #bjStakeBox label{
+    font-size:11px;
+    color:var(--text-dim);
+    font-weight:600;
+    letter-spacing:1px;
+    text-transform:uppercase;
+  }
+  #stakeInput, #baccStakeInput, #bjStakeInput{
+    width:70px;
+    background:var(--surface-2);
+    border:1px solid var(--line);
+    border-radius:6px;
+    color:var(--text);
+    font-size:14px;
+    font-weight:700;
+    padding:6px 8px;
+    font-family:inherit;
+  }
+  #stakeInput:focus, #baccStakeInput:focus, #bjStakeInput:focus{outline:1px solid var(--purple);}
+  .preset-btn{
+    padding:10px 18px;
+    border-radius:10px;
+    border:1px solid var(--line);
+    background:linear-gradient(160deg, var(--surface-2), var(--surface));
+    color:var(--text-dim);
+    font-size:13px;
+    font-weight:700;
+    letter-spacing:.3px;
+    cursor:pointer;
+    font-family:inherit;
+    transition:transform .15s cubic-bezier(.2,.8,.3,1.3), border-color .15s, color .15s, box-shadow .15s, background .15s;
+  }
+  .preset-btn:hover{
+    border-color:var(--purple);
+    color:var(--text);
+    transform:translateY(-2px);
+    box-shadow:0 8px 20px rgba(130,46,255,.25);
+    background:linear-gradient(160deg, var(--surface-2), rgba(130,46,255,.12));
+  }
+  .preset-btn:active{
+    transform:translateY(0) scale(.96);
+    box-shadow:0 2px 8px rgba(130,46,255,.2);
+  }
+  #minesStartBtn, #minesCashoutBtn{
+    padding:13px 28px;
+    font-size:14px;
+    border-radius:12px;
+    text-transform:uppercase;
+    letter-spacing:.6px;
+  }
+  #minesStartBtn{
+    background:linear-gradient(160deg, var(--purple), #5c1cc4);
+    border-color:var(--purple-light, var(--purple));
+    color:#fff;
+    box-shadow:0 6px 18px rgba(130,46,255,.35);
+  }
+  #minesStartBtn:hover{
+    background:linear-gradient(160deg, #9550ff, var(--purple));
+    box-shadow:0 10px 26px rgba(130,46,255,.5);
+  }
+  #minesCashoutBtn{
+    background:linear-gradient(160deg, #2fb968, #1f8f4f);
+    color:#fff;
+    box-shadow:0 6px 18px rgba(47,168,79,.35);
+    animation:cashout-pulse 1.8s ease-in-out infinite;
+  }
+  #minesCashoutBtn:hover{
+    background:linear-gradient(160deg, #3fd67d, #2fb968);
+    box-shadow:0 10px 26px rgba(47,168,79,.5);
+  }
+  @keyframes cashout-pulse{
+    0%,100%{ box-shadow:0 6px 18px rgba(47,168,79,.35); }
+    50%{ box-shadow:0 6px 26px rgba(47,168,79,.65); }
+  }
+
+  .action-btn{
+    padding:11px 22px;
+    border-radius:10px;
+    border:1px solid var(--line);
+    font-family:inherit;
+    font-size:13px;
+    letter-spacing:.5px;
+    text-transform:uppercase;
+    cursor:pointer;
+    font-weight:700;
+    transition:.15s;
+    background:transparent;
+    color:var(--text);
+  }
+  #clearBtn:hover{background:var(--surface-2); border-color:var(--purple);}
+
+  #betTotal, #baccBetTotal{
+    font-size:12px;
+    color:var(--text-dim);
+    letter-spacing:.5px;
+    font-variant-numeric: tabular-nums;
+  }
+  .fast-mode-toggle{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    padding:8px 12px;
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:10px;
+    font-size:12px;
+    font-weight:600;
+    color:var(--text-dim);
+    cursor:pointer;
+    user-select:none;
+  }
+  .fast-mode-toggle input{
+    width:15px; height:15px;
+    accent-color:var(--purple);
+    cursor:pointer;
+  }
+  .fast-mode-toggle:has(input:checked){
+    border-color:var(--purple);
+    color:var(--purple-light);
+  }
+  #spinBtn, #baccPlayBtn, #bjDealBtn{
+    padding:13px 30px;
+    font-size:14px;
+    border-radius:12px;
+    text-transform:uppercase;
+    letter-spacing:.6px;
+    background:linear-gradient(160deg, var(--purple), #5c1cc4);
+    border-color:var(--purple);
+    color:#fff;
+    box-shadow:0 6px 18px rgba(130,46,255,.35);
+  }
+  #spinBtn:hover, #baccPlayBtn:hover, #bjDealBtn:hover{
+    background:linear-gradient(160deg, #9550ff, var(--purple));
+    box-shadow:0 10px 26px rgba(130,46,255,.5);
+  }
+
+  /* Table */
+  #table{
+    margin-top:18px;
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:14px;
+    box-shadow:0 10px 30px rgba(0,0,0,.4);
+    max-width:640px;
+  }
+
+  .grid-row{
+    display:flex;
+    align-items:stretch;
+  }
+  #numGrid{
+    display:grid;
+    grid-template-columns: 44px repeat(12, 40px);
+    grid-template-rows: repeat(3, 38px);
+    gap:2px;
+  }
+  .cell{
+    display:flex;align-items:center;justify-content:center;
+    color:#fff;
+    font-size:13px;
+    font-weight:700;
+    border-radius:4px;
+    cursor:pointer;
+    position:relative;
+    user-select:none;
+    transition:.12s;
+    border:1px solid rgba(0,0,0,.35);
+  }
+  .cell:hover{filter:brightness(1.25); transform:scale(1.03); z-index:2;}
+  .cell.red{background:var(--red);}
+  .cell.black{background:var(--black);}
+  .cell.green{background:var(--green);}
+  .cell.zero{grid-row: 1 / span 3; grid-column:1; font-size:16px;}
+  .cell.outside{
+    background:var(--surface-2);
+    border:1px solid var(--line);
+    color:var(--text);
+  }
+  .cell.outside:hover{background:#323236; border-color:var(--purple);}
+  .cell.win-flash{
+    outline:3px solid var(--purple);
+    box-shadow:0 0 14px 3px rgba(130,46,255,.6);
+  }
+  .cell.hover-win{
+    outline:2px solid var(--purple);
+    outline-offset:-2px;
+    box-shadow:0 0 10px 2px rgba(130,46,255,.55);
+    z-index:2;
+  }
+
+  .chip-badge{
+    position:absolute;
+    bottom:-4px; right:-4px;
+    background:var(--purple);
+    color:#fff;
+    font-size:10px;
+    font-weight:700;
+    min-width:18px;
+    height:18px;
+    padding:0 3px;
+    border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    border:1px solid #0d0d0e;
+    box-shadow:0 2px 4px rgba(0,0,0,.5);
+    z-index:3;
+  }
+
+  #columnBets{
+    display:grid;
+    grid-template-rows: repeat(3, 38px);
+    gap:2px;
+    margin-left:2px;
+  }
+  #columnBets .cell{width:56px; font-size:11px; letter-spacing:.5px;}
+
+  #dozens{
+    display:grid;
+    grid-template-columns: 44px repeat(3, 166px);
+    width:548px;
+    gap:2px;
+    margin-top:2px;
+  }
+  #dozens .cell{grid-column:span 1; height:34px; font-size:12px;}
+  #dozens .spacer{background:transparent; cursor:default;}
+
+  #outsideBets{
+    display:grid;
+    grid-template-columns: 44px repeat(6, 82px);
+    width:548px;
+    gap:2px;
+    margin-top:2px;
+  }
+  #outsideBets .cell{height:34px; font-size:12px; letter-spacing:.5px;}
+  #outsideBets .spacer{background:transparent; cursor:default;}
+  .diamond{
+    width:14px;height:14px;
+    background:var(--red);
+    display:inline-block;
+    transform:rotate(45deg);
+    border:1px solid rgba(0,0,0,.4);
+  }
+  .diamond.blk{background:var(--black); border-color:#444;}
+
+  footer{
+    margin-top:20px;
+    font-size:11px;
+    color:var(--text-dim);
+    letter-spacing:1px;
+  }
+
+  /* Auth */
+  #authButtons{
+    position:fixed;
+    top:16px;
+    right:16px;
+    z-index:50;
+  }
+  #spwminiAuthStatus{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:12px 20px;
+    font-size:13px;
+    font-weight:700;
+    color:var(--text-dim);
+  }
+  #spwminiAuthStatus.error{
+    color:#ff6b6b;
+    border-color:#ff6b6b;
+  }
+
+  #userBox{
+    position:fixed;
+    top:16px;
+    right:16px;
+    z-index:50;
+    display:none;
+    grid-template-columns:auto auto;
+    align-items:center;
+    justify-items:end;
+    column-gap:14px;
+    row-gap:6px;
+  }
+  #userBox .left-actions{
+    display:flex;
+    gap:6px;
+  }
+  #userBox .action-row{
+    grid-column:1 / span 2;
+    display:flex;
+    gap:6px;
+    justify-content:flex-end;
+  }
+  #userBox .action-row .preset-btn{
+    padding:5px 10px;
+    font-size:11px;
+  }
+  #userBox .label{
+    font-size:10px;
+    font-weight:600;
+    letter-spacing:1.5px;
+    text-transform:uppercase;
+    color:var(--text-dim);
+  }
+  #userBox #whoName{
+    font-size:13px;
+    font-weight:700;
+    color:var(--text);
+    justify-self:center;
+    text-align:center;
+  }
+  #balanceBadge{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:7px 14px;
+    text-align:right;
+    box-shadow:0 6px 20px rgba(0,0,0,.4);
+  }
+  #userBox #whoBalance{
+    font-size:16px;
+    font-weight:700;
+    color:var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+  #userBox #whoCode{
+    font-size:11px;
+    color:var(--text-dim);
+    font-weight:600;
+    letter-spacing:1px;
+    font-variant-numeric: tabular-nums;
+    position:relative;
+    left:2px;
+  }
+  #adminBtn{
+    background:var(--surface-2);
+    border:1px solid var(--line);
+    color:var(--text-dim);
+    border-radius:8px;
+    padding:6px 10px;
+    font-size:11px;
+    font-weight:600;
+    cursor:pointer;
+    font-family:inherit;
+  }
+  #adminBtn:hover{border-color:var(--purple); color:var(--text);}
+  #adminBtn{background:var(--purple-dim); border-color:var(--purple); color:var(--purple-light);}
+
+  .modal-overlay{
+    position:fixed; inset:0;
+    background:rgba(10,10,11,.72);
+    display:none;
+    align-items:center;
+    justify-content:center;
+    z-index:200;
+  }
+  .modal-overlay.open{display:flex;}
+
+  /* Small, non-blocking toast — e.g. "Скопировано!" after copying the ID.
+     Sits above modals, never intercepts clicks, fades itself out. */
+  #copyToast{
+    position:fixed;
+    top:50%;
+    left:50%;
+    transform:translate(-50%, -50%) scale(.96);
+    z-index:300;
+    background:rgba(20,20,23,.92);
+    border:1px solid var(--purple);
+    color:#fff;
+    padding:8px 18px;
+    border-radius:10px;
+    font-size:13px;
+    font-weight:700;
+    letter-spacing:.3px;
+    pointer-events:none;
+    opacity:0;
+    transition:opacity .18s ease, transform .18s ease;
+  }
+  #copyToast.show{
+    opacity:1;
+    transform:translate(-50%, -50%) scale(1);
+  }
+  .modal{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:24px;
+    width:320px;
+    box-shadow:0 20px 60px rgba(0,0,0,.6);
+  }
+  .modal h2{margin:0 0 4px; font-size:16px; color:#fff;}
+  .modal .sub{font-size:12px; color:var(--text-dim); margin-bottom:16px;}
+  .modal .tabs{display:flex; gap:6px; margin-bottom:16px;}
+  .modal .tab{
+    flex:1;
+    text-align:center;
+    padding:8px;
+    border-radius:8px;
+    background:var(--surface-2);
+    color:var(--text-dim);
+    font-size:12px;
+    font-weight:700;
+    cursor:pointer;
+    border:1px solid var(--line);
+  }
+  .modal .tab.active{background:var(--purple-dim); color:var(--purple-light); border-color:var(--purple);}
+  .modal label{
+    display:block;
+    font-size:11px;
+    color:var(--text-dim);
+    font-weight:600;
+    letter-spacing:.5px;
+    text-transform:uppercase;
+    margin:10px 0 4px;
+  }
+  .modal input{
+    width:100%;
+    background:var(--surface-2);
+    border:1px solid var(--line);
+    border-radius:8px;
+    color:var(--text);
+    font-size:14px;
+    padding:9px 10px;
+    font-family:inherit;
+  }
+  .modal input:focus{outline:1px solid var(--purple);}
+  .modal .err{color:#e05a4e; font-size:12px; min-height:16px; margin-top:8px;}
+  .modal .primary-btn{
+    width:100%;
+    margin-top:14px;
+    padding:11px;
+    border:none;
+    border-radius:8px;
+    background:var(--purple);
+    color:#fff;
+    font-weight:700;
+    font-size:13px;
+    text-transform:uppercase;
+    letter-spacing:.5px;
+    cursor:pointer;
+  }
+  .modal .primary-btn:hover{background:var(--purple-light);}
+  .modal .close-x{
+    float:right;
+    cursor:pointer;
+    color:var(--text-dim);
+    font-size:18px;
+    line-height:1;
+  }
+
+  #adminModal .modal{width:640px; max-width:92vw; max-height:85vh; overflow-y:auto;}
+  #adminModal table{width:100%; border-collapse:collapse; margin-top:6px; font-size:12px;}
+  #adminModal th{text-align:left; color:var(--text-dim); font-weight:600; padding:6px 4px; border-bottom:1px solid var(--line);}
+  #adminModal td{padding:6px 4px; border-bottom:1px solid var(--line);}
+  #adminModal .credit-row{display:flex; gap:6px; align-items:center;}
+  #adminModal .credit-row input{width:auto; flex:1; padding:5px 6px;}
+  #adminModal .credit-row button{
+    background:var(--purple); color:#fff; border:none; border-radius:6px;
+    padding:5px 8px; font-size:11px; cursor:pointer; font-weight:700;
+  }
+  #adminModal .section-title{
+    font-size:11px; text-transform:uppercase; letter-spacing:1px; color:var(--purple-light);
+    margin:16px 0 6px; font-weight:700;
+  }
+  #adminModal .force-row{display:flex; gap:8px; align-items:center;}
+  #adminModal .force-row input{width:60px;}
+  #adminModal .force-row button{
+    background:var(--surface-2); border:1px solid var(--purple); color:var(--purple-light);
+    border-radius:6px; padding:7px 10px; font-size:11px; cursor:pointer; font-weight:700;
+  }
+
+  .admin-tabs{display:flex; gap:6px; margin-bottom:14px;}
+  .admin-tab{
+    padding:8px 14px; border-radius:8px; background:var(--surface-2);
+    border:1px solid var(--line); color:var(--text-dim); font-size:12px;
+    font-weight:700; cursor:pointer;
+  }
+  .admin-tab.active{background:var(--purple-dim); color:var(--purple-light); border-color:var(--purple);}
+  .admin-pane{display:none;}
+  .admin-pane.active{display:block;}
+
+  .stats-btn-col{display:flex; flex-direction:column; gap:10px;}
+  .stats-report-btn{
+    display:flex; flex-direction:column; align-items:flex-start; gap:4px;
+    text-align:left; width:100%;
+    padding:14px 16px; border-radius:12px;
+    background:linear-gradient(160deg, var(--surface-2), var(--surface));
+    border:1px solid var(--line); cursor:pointer;
+    font-family:inherit;
+    transition:border-color .15s, transform .15s, box-shadow .15s;
+  }
+  .stats-report-btn:hover{
+    border-color:var(--purple);
+    transform:translateY(-2px);
+    box-shadow:0 8px 20px rgba(130,46,255,.2);
+  }
+  .stats-report-btn:disabled{opacity:.55; cursor:default; transform:none; box-shadow:none;}
+  .stats-report-name{font-size:14px; font-weight:800; color:var(--purple-light);}
+  .stats-report-desc{font-size:11px; color:var(--text-dim); line-height:1.4;}
+  .sub-tabs{display:flex; gap:6px; margin:14px 0 8px;}
+  .sub-tab{
+    padding:5px 10px; border-radius:6px; background:transparent;
+    border:1px solid var(--line); color:var(--text-dim); font-size:11px;
+    font-weight:600; cursor:pointer;
+  }
+  .sub-tab.active{border-color:var(--purple-light); color:var(--purple-light);}
+  .sub-pane{display:none;}
+  .sub-pane.active{display:block;}
+
+  .ticket{
+    background:var(--surface-2);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:10px 12px;
+    margin-bottom:8px;
+    font-size:12px;
+  }
+  .ticket.paid{border-color:#2fa84f; box-shadow:0 0 0 1px #2fa84f;}
+  .ticket .ticket-top{display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;}
+  .ticket .ticket-nick{font-weight:700; color:var(--text);}
+  .ticket .ticket-amount{font-weight:800; color:var(--purple-light); font-size:14px;}
+  .ticket .ticket-meta{color:var(--text-dim); font-size:11px; margin-bottom:8px;}
+  .ticket .ticket-actions{display:flex; gap:6px;}
+  .btn-green{
+    background:#2fa84f; color:#fff; border:none; border-radius:6px;
+    padding:6px 12px; font-size:11px; cursor:pointer; font-weight:700;
+  }
+  .btn-green:hover{background:#35bd58;}
+  .btn-red{
+    background:#c0392b; color:#fff; border:none; border-radius:6px;
+    padding:6px 12px; font-size:11px; cursor:pointer; font-weight:700;
+  }
+  .btn-red:hover{background:#d9483a;}
+  .empty-note{color:var(--text-dim); font-size:12px; padding:6px 2px;}
+
+  /* deposit / withdraw / history modals */
+  #depositModal .modal, #withdrawModal .modal, #historyModal .modal{width:340px;}
+  .dep-steps{font-size:12px; color:var(--text-dim); line-height:1.6; margin:10px 0 14px;}
+  .dep-steps b{color:var(--text); font-weight:700;}
+  .id-copy{
+    display:inline-block; background:var(--surface-2); border:1px solid var(--line);
+    border-radius:6px; padding:3px 8px; color:var(--purple-light); font-weight:700;
+    cursor:pointer; font-variant-numeric: tabular-nums;
+  }
+  .dep-highlight{
+    background:linear-gradient(160deg, var(--purple), #5c1fb0);
+    border-radius:12px;
+    padding:16px;
+    text-align:center;
+    margin:10px 0 14px;
+  }
+  .dep-highlight .dep-amount{font-size:24px; font-weight:800; color:#fff;}
+  .dep-highlight .dep-card-label{font-size:10px; color:rgba(255,255,255,.75); text-transform:uppercase; letter-spacing:1px; margin-top:8px;}
+  .dep-highlight .dep-card{font-size:28px; font-weight:800; color:#fff; letter-spacing:2px;}
+  .dep-timer{text-align:center; font-size:12px; color:var(--text-dim); margin-bottom:10px; font-variant-numeric: tabular-nums;}
+  .dep-btn-row{display:flex; gap:8px;}
+  .dep-btn-row button{flex:1; padding:11px; border-radius:8px; border:none; font-weight:700; font-size:13px; cursor:pointer; font-family:inherit;}
+  .dep-note{font-size:11px; color:var(--text-dim); margin-top:10px; text-align:center;}
+  .dep-waiting{text-align:center; padding:20px 0;}
+  .dep-waiting .clock{font-size:36px;}
+  .dep-waiting div{color:var(--text-dim); font-size:13px; margin-top:8px;}
+  .history-section{margin-bottom:16px;}
+  .history-row{
+    display:flex; justify-content:space-between; align-items:center;
+    background:var(--surface-2); border:1px solid var(--line); border-radius:8px;
+    padding:8px 10px; margin-bottom:6px; font-size:12px;
+  }
+  .history-row .hs-amount{font-weight:700; color:var(--text);}
+  .history-row .hs-status{font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.5px;}
+
+  @media (max-width:900px){
+    #modeSidebar{display:none;}
+  }
+  @media (max-width:480px){
+    #wheelWrap{width:320px;height:320px;}
+    #numGrid{grid-template-columns: 34px repeat(12, 30px); grid-template-rows: repeat(3,30px);}
+    #columnBets .cell{width:44px;}
+    .cell.zero{font-size:13px;}
+    #table{padding:8px;}
+    #adminModal .modal{width:96vw;}
+    #dozens{grid-template-columns: 34px repeat(3, 126px); width:418px;}
+    #outsideBets{grid-template-columns: 34px repeat(6, 62px); width:418px;}
+    #minesGrid{grid-template-columns:repeat(5, 52px); grid-template-rows:repeat(5, 52px);}
+    #minesProgressViewport{width:292px;}
+    .mines-step{flex-basis:52px; width:52px; height:52px; font-size:11px;}
+    .mines-tile{font-size:20px;}
+  }
+  /* Blackjack & Baccarat: bigger cards/buttons and pulled down toward
+     vertical center instead of sitting right under the header. */
+  #baccaratGame, #blackjackGame{ display:contents; }
+  #baccTableFelt, #bjTableFelt{
+    margin-top:8vh;
+  }
+  .bacc-card, .bj-card{
+    width:78px; height:112px;
+    border-radius:11px;
+    font-size:26px;
+  }
+  .bacc-cards, .bj-cards{ min-height:116px; gap:10px; }
+  #bjPlayerHandsRow{ gap:28px; }
+  #baccTableFelt{ gap:46px; }
+  #baccControls, #bjControls{ margin-top:30px; gap:18px; }
+  #baccStakeBox, #bjStakeBox{ padding:11px 16px; }
+  #baccStakeInput, #bjStakeInput{ width:82px; font-size:16px; padding:8px 10px; }
+  #baccControls .preset-btn, #bjControls .preset-btn{
+    padding:14px 26px;
+    font-size:15px;
+    border-radius:12px;
+  }
+  @media (max-width:600px){
+    #baccTableFelt, #bjTableFelt{ margin-top:4vh; }
+    .bacc-card, .bj-card{ width:64px; height:92px; font-size:22px; }
+    .bacc-cards, .bj-cards{ min-height:96px; }
+  }
+</style>
+</head>
+<body>
+
+  <div id="modeSidebar">
+    <button class="mode-btn active" data-mode="roulette">
+      <div class="mode-icon">🎡</div>
+      <div class="mode-label">Рулетка</div>
+    </button>
+    <button class="mode-btn" data-mode="blackjack">
+      <div class="mode-icon">🃏</div>
+      <div class="mode-label">Blackjack</div>
+    </button>
+    <button class="mode-btn" data-mode="baccarat">
+      <div class="mode-icon">🎴</div>
+      <div class="mode-label">Baccarat</div>
+    </button>
+    <button class="mode-btn" data-mode="plinko">
+      <div class="mode-icon">🟣</div>
+      <div class="mode-label">Plinko</div>
+    </button>
+    <button class="mode-btn" data-mode="jackpot">
+      <div class="mode-icon">🎰</div>
+      <div class="mode-label">Jackpot</div>
+    </button>
+    <button class="mode-btn" data-mode="crash">
+      <div class="mode-icon">📈</div>
+      <div class="mode-label">Crash</div>
+    </button>
+    <button class="mode-btn" data-mode="mines">
+      <div class="mode-icon">💣</div>
+      <div class="mode-label">Mines</div>
+    </button>
+  </div>
+  <div id="modeToast">Скоро… 💤</div>
+
+  <div id="authButtons" style="display:none;">
+    <div id="spwminiAuthStatus">Авторизация через SPWorlds…</div>
+  </div>
+
+  <div id="userBox" style="display:none;">
+    <div id="whoCode">Код: —</div>
+    <div id="whoName">—</div>
+    <div class="left-actions">
+      <button id="adminBtn" style="display:none;">Админ</button>
+    </div>
+    <div id="balanceBadge">
+      <div class="label">Баланс</div>
+      <div id="whoBalance">0</div>
+    </div>
+    <div class="action-row">
+      <button id="historyBtn" class="preset-btn">История</button>
+      <button id="withdrawBtn" class="preset-btn">Вывод</button>
+      <button id="depositBtn" class="preset-btn" style="border-color:#2fa84f;color:#2fa84f;">Пополнить</button>
+    </div>
+  </div>
+
+  <h1><span>Mells</span>.Bet <button id="soundToggleBtn" title="Звук">🔊</button></h1>
+
+  <div id="rouletteGame">
+    <div id="wheelWrap">
+      <div id="wheelRing"></div>
+      <div id="wheel"></div>
+      <div id="hub"><span id="hubIcon">◆</span></div>
+      <div id="pointer"></div>
+    </div>
+
+    <div id="result">
+      <div id="resultNum"></div>
+      <div id="resultText">Сделайте ставку и нажмите «Крутить»</div>
+    </div>
+
+    <div id="history"></div>
+
+    <div id="controls">
+      <div id="stakeBox">
+        <label for="stakeInput">Ставка</label>
+        <input type="number" id="stakeInput" min="1" max="250" step="1" value="10">
+      </div>
+      <button class="preset-btn" data-val="250">Макс</button>
+      <button class="preset-btn" id="cancelLastBtn">Отменить</button>
+      <label class="fast-mode-toggle">
+        <input type="checkbox" id="rouletteFastModeToggle">
+        <span>Fast mode</span>
+      </label>
+      <span id="betTotal">Ставка: 0</span>
+      <button class="preset-btn" id="spinBtn">Крутить</button>
+    </div>
+
+    <div id="table">
+      <div class="grid-row">
+        <div id="numGrid"></div>
+        <div id="columnBets"></div>
+      </div>
+      <div id="dozens"></div>
+      <div id="outsideBets"></div>
+    </div>
+  </div>
+
+  <div id="baccaratGame" style="display:none;">
+    <div id="baccTableFelt">
+      <div class="bacc-hand" id="baccPlayerHand">
+        <div class="bacc-hand-label bacc-label-player">Игрок <span id="baccPlayerTotal">—</span></div>
+        <div class="bacc-cards" id="baccPlayerCards"></div>
+      </div>
+      <div class="bacc-hand" id="baccBankerHand">
+        <div class="bacc-hand-label bacc-label-banker">Банкир <span id="baccBankerTotal">—</span></div>
+        <div class="bacc-cards" id="baccBankerCards"></div>
+      </div>
+    </div>
+
+    <div id="baccResult">
+      <div id="baccResultText">Сделайте ставку и нажмите «Играть»</div>
+    </div>
+
+    <div id="baccHistory"></div>
+
+    <div id="baccControls">
+      <div id="baccStakeBox">
+        <label for="baccStakeInput">Ставка</label>
+        <input type="number" id="baccStakeInput" min="1" max="500" step="1" value="10">
+      </div>
+      <button class="preset-btn" data-baccval="500">Макс</button>
+      <button class="preset-btn" id="baccCancelLastBtn">Отменить</button>
+      <label class="fast-mode-toggle">
+        <input type="checkbox" id="baccFastModeToggle">
+        <span>Fast mode</span>
+      </label>
+      <span id="baccBetTotal">Ставка: 0</span>
+      <button class="preset-btn" id="baccPlayBtn">Играть</button>
+    </div>
+
+    <div id="baccBetRow">
+      <button class="bacc-bet-cell bacc-bet-player" data-betkey="player">
+        <div class="bacc-bet-name">Игрок</div>
+        <div class="bacc-bet-odds">1 : 1</div>
+      </button>
+      <button class="bacc-bet-cell bacc-bet-tie" data-betkey="tie">
+        <div class="bacc-bet-name">Ничья</div>
+        <div class="bacc-bet-odds">8 : 1</div>
+      </button>
+      <button class="bacc-bet-cell bacc-bet-banker" data-betkey="banker">
+        <div class="bacc-bet-name">Банкир</div>
+        <div class="bacc-bet-odds">0.95 : 1</div>
+      </button>
+    </div>
+  </div>
+
+  <div id="minesGame" style="display:none;">
+    <div id="minesTopRow">
+      <div id="minesMultiplierBox">
+        <div class="label">Множитель</div>
+        <div id="minesMultiplierVal">1.0000x</div>
+      </div>
+      <div id="minesPotentialBox">
+        <div class="label">Возможный выигрыш</div>
+        <div id="minesPotentialVal">0</div>
+      </div>
+    </div>
+
+    <div id="minesGrid"></div>
+
+    <div id="minesProgressFrame"><div id="minesProgressViewport"><div id="minesProgress"></div></div></div>
+
+    <div id="minesResult">
+      <div id="minesResultText">Настройте ставку и количество мин, затем начните игру</div>
+    </div>
+
+    <div id="minesControls">
+      <div id="minesStakeBox">
+        <label for="minesStakeInput">Ставка</label>
+        <input type="number" id="minesStakeInput" min="1" max="50" step="1" value="10">
+      </div>
+      <div id="minesCountBox">
+        <label for="minesCountBtn">Мины</label>
+        <div id="minesCountCustom">
+          <button type="button" id="minesCountBtn">
+            <span id="minesCountBtnVal">3</span>
+            <svg id="minesCountArrow" width="11" height="7" viewBox="0 0 11 7" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1 1L5.5 5.5L10 1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <div id="minesCountPanel"></div>
+        </div>
+        <select id="minesCountInput" style="display:none;">
+          <!-- filled by JS: 1..24 -->
+        </select>
+      </div>
+      <button class="preset-btn" id="minesMaxBtn">Макс</button>
+      <button class="preset-btn" id="minesStartBtn">Начать игру</button>
+      <button class="preset-btn" id="minesCashoutBtn" style="display:none;">Забрать</button>
+    </div>
+  </div>
+
+  <div id="blackjackGame" style="display:none;">
+    <div id="bjTableFelt">
+      <div class="bj-hand" id="bjDealerHand">
+        <div class="bj-hand-label bj-label-dealer">Дилер <span id="bjDealerTotal">—</span></div>
+        <div class="bj-cards" id="bjDealerCards"></div>
+      </div>
+      <div id="bjPlayerHandsRow"></div>
+    </div>
+
+    <div id="bjResult">
+      <div id="bjResultText">Настройте ставку и нажмите «Раздать»</div>
+    </div>
+
+    <div id="bjControls">
+      <div id="bjStakeBox">
+        <label for="bjStakeInput">Ставка</label>
+        <input type="number" id="bjStakeInput" min="1" max="500" step="1" value="10">
+      </div>
+      <button class="preset-btn" id="bjMaxBtn">Макс</button>
+      <button class="preset-btn" id="bjDealBtn">Раздать</button>
+      <button class="preset-btn" id="bjHitBtn" style="display:none;">Ещё карту</button>
+      <button class="preset-btn" id="bjStandBtn" style="display:none;">Хватит</button>
+      <button class="preset-btn" id="bjDoubleBtn" style="display:none;">Удвоить</button>
+      <button class="preset-btn" id="bjSplitBtn" style="display:none;">Сплит</button>
+    </div>
+  </div>
+
+  <div id="winPopup">
+    <div class="win-label">Выигрыш</div>
+    <div class="win-amount" id="winPopupAmount">0</div>
+    <div class="win-mode" id="winPopupMode"></div>
+  </div>
+
+  <footer>Условная игра · без реальных денег</footer>
+
+  <div class="modal-overlay" id="adminModal">
+    <div class="modal">
+      <span class="close-x" id="adminClose">&times;</span>
+      <h2>Админ-панель</h2>
+      <div class="sub">Игроки, пополнения и выводы условного баланса</div>
+
+      <div class="admin-tabs">
+        <div class="admin-tab active" data-pane="panePlayers">Игроки</div>
+        <div class="admin-tab" data-pane="paneDeposits">Пополнения</div>
+        <div class="admin-tab" data-pane="paneWithdrawals">Выводы</div>
+        <div class="admin-tab" data-pane="paneStats">Статистика</div>
+      </div>
+
+      <div class="admin-pane active" id="panePlayers">
+        <div class="section-title">Начислить баланс</div>
+        <div class="credit-row">
+          <input type="text" id="creditNick" placeholder="Ник или код игрока">
+          <input type="number" id="creditAmount" placeholder="Сумма">
+          <button id="creditSubmit">Начислить</button>
+        </div>
+        <div class="err" id="creditErr"></div>
+
+        <div class="section-title">Игроки</div>
+        <table>
+          <thead><tr><th>Ник</th><th>Код</th><th>Баланс</th><th>Роль</th></tr></thead>
+          <tbody id="playersTableBody"></tbody>
+        </table>
+
+        <div class="section-title">Права администратора</div>
+        <div class="credit-row">
+          <input type="text" id="roleNick" placeholder="Ник или код игрока">
+          <button id="roleGrantSubmit" class="btn-green" style="padding:5px 10px;">Сделать админом</button>
+          <button id="roleRevokeSubmit" class="btn-red" style="padding:5px 10px;">Снять права</button>
+        </div>
+        <div class="err" id="roleErr"></div>
+      </div>
+
+      <div class="admin-pane" id="paneDeposits">
+        <div class="sub-tabs">
+          <div class="sub-tab active" data-sub="depActive">Активные</div>
+          <div class="sub-tab" data-sub="depHistory">История</div>
+        </div>
+        <div class="sub-pane active" id="depActive"></div>
+        <div class="sub-pane" id="depHistory"></div>
+      </div>
+
+      <div class="admin-pane" id="paneWithdrawals">
+        <div class="sub-tabs">
+          <div class="sub-tab active" data-sub="wdActive">Активные</div>
+          <div class="sub-tab" data-sub="wdHistory">История</div>
+        </div>
+        <div class="sub-pane active" id="wdActive"></div>
+        <div class="sub-pane" id="wdHistory"></div>
+      </div>
+
+      <div class="admin-pane" id="paneStats">
+        <div class="section-title">Отчёты</div>
+        <div class="stats-btn-col">
+          <button class="stats-report-btn" id="statsFull1dBtn">
+            <span class="stats-report-name">Full-stats-1D</span>
+            <span class="stats-report-desc">Ставки и пополнения за последние 24 часа (текстовый файл, каждая запись хранится ровно сутки с момента создания)</span>
+          </button>
+          <button class="stats-report-btn" id="stats7dBtn">
+            <span class="stats-report-name">Stats-7D</span>
+            <span class="stats-report-desc">Сводная таблица по игрокам и режимам за последнюю завершённую неделю (Excel, обновляется каждое воскресенье)</span>
+          </button>
+          <button class="stats-report-btn" id="statsAllBtn">
+            <span class="stats-report-name">Stats-All</span>
+            <span class="stats-report-desc">Та же сводная таблица, но за всё время без сброса (Excel)</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="copyToast">Скопировано!</div>
+
+  <!-- Register: choose method -->
+  <div class="modal-overlay" id="depositModal">
+    <div class="modal">
+      <span class="close-x" id="depositClose">&times;</span>
+      <h2>Пополнение</h2>
+      <div id="depStageAmount">
+        <div class="sub">Введите сумму пополнения (максимум 100 000 АР)</div>
+        <label>Сумма (АР)</label>
+        <input type="number" id="depAmountInput" min="1" max="100000" placeholder="Например, 500">
+        <div class="err" id="depAmountErr"></div>
+        <button class="primary-btn" id="depAmountSubmit">Пополнить</button>
+      </div>
+
+      <div id="depStageWaiting" style="display:none;">
+        <div class="dep-waiting">
+          <div class="clock">⏰</div>
+          <div id="depWaitingText">Оплатите в открывшемся окне SPWorlds…</div>
+        </div>
+        <div class="dep-btn-row">
+          <button class="btn-red" id="depCancelBtn">Отменить</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="withdrawModal">
+    <div class="modal">
+      <span class="close-x" id="withdrawClose">&times;</span>
+      <h2>Вывод</h2>
+      <div id="wdStageForm">
+        <label>Номер карты СПм</label>
+        <input type="text" id="wdCard" placeholder="Ваш номер карты">
+        <label>Сумма АР</label>
+        <input type="number" id="wdAmount" placeholder="Сколько вывести">
+        <div class="err" id="wdErr"></div>
+        <button class="primary-btn" id="wdSubmit" style="background:#2fa84f;">Вывод</button>
+      </div>
+      <div id="wdStageWaiting" style="display:none;">
+        <div class="dep-waiting">
+          <div class="clock">✅</div>
+          <div id="wdWaitingText">Готово! АР отправлены на вашу карту.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="historyModal">
+    <div class="modal">
+      <span class="close-x" id="historyClose">&times;</span>
+      <h2>История</h2>
+      <div class="sub-tabs">
+        <div class="sub-tab active" data-sub="histWithdrawals">Выводы</div>
+        <div class="sub-tab" data-sub="histDeposits">Пополнения</div>
+      </div>
+      <div class="sub-pane active" id="histWithdrawals">
+        <div id="historyWithdrawals"></div>
+      </div>
+      <div class="sub-pane" id="histDeposits">
+        <div id="historyDeposits"></div>
+      </div>
+    </div>
+  </div>
+
+<script>
+(function(){
+  // ---------- Sound effects (Web Audio API, no external files) ----------
+  // Every sound is synthesized on the fly with oscillators/noise bursts —
+  // short, percussive, and cheap to generate, so there's nothing to
+  // preload and nothing that can 404. AudioContext can't start before a
+  // user gesture in most browsers, so it's created lazily on first click.
+  const Sound = (() => {
+    let ctx = null;
+    let muted = localStorage.getItem('spm_muted') === '1';
+
+    function ensureCtx(){
+      if(!ctx){
+        try{ ctx = new (window.AudioContext || window.webkitAudioContext)(); }
+        catch(e){ return null; }
+      }
+      if(ctx.state === 'suspended') ctx.resume();
+      return ctx;
+    }
+
+    function tone(freq, { start=0, duration=0.12, type='sine', gain=0.16, freqEnd=null, delay=0 } = {}){
+      if(muted) return;
+      const c = ensureCtx();
+      if(!c) return;
+      const t0 = c.currentTime + delay;
+      const osc = c.createOscillator();
+      const g = c.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, t0);
+      if(freqEnd !== null) osc.frequency.exponentialRampToValueAtTime(Math.max(freqEnd,1), t0 + duration);
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(gain, t0 + Math.min(0.015, duration*0.3));
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
+      osc.connect(g).connect(c.destination);
+      osc.start(t0);
+      osc.stop(t0 + duration + 0.02);
+    }
+
+    function noiseBurst({ duration=0.25, delay=0, gain=0.25, filterType='lowpass', filterFreq=1200, filterFreqEnd=null } = {}){
+      if(muted) return;
+      const c = ensureCtx();
+      if(!c) return;
+      const t0 = c.currentTime + delay;
+      const bufferSize = Math.floor(c.sampleRate * duration);
+      const buffer = c.createBuffer(1, bufferSize, c.sampleRate);
+      const data = buffer.getChannelData(0);
+      for(let i=0;i<bufferSize;i++) data[i] = (Math.random()*2-1) * (1 - i/bufferSize);
+      const src = c.createBufferSource();
+      src.buffer = buffer;
+      const filter = c.createBiquadFilter();
+      filter.type = filterType;
+      filter.frequency.setValueAtTime(filterFreq, t0);
+      if(filterFreqEnd !== null) filter.frequency.exponentialRampToValueAtTime(Math.max(filterFreqEnd,1), t0+duration);
+      const g = c.createGain();
+      g.gain.setValueAtTime(gain, t0);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
+      src.connect(filter).connect(g).connect(c.destination);
+      src.start(t0);
+    }
+
+    return {
+      isMuted: () => muted,
+      setMuted(v){
+        muted = v;
+        localStorage.setItem('spm_muted', v ? '1' : '0');
+      },
+      unlock(){ ensureCtx(); },
+
+      click(){ tone(720, { duration:0.05, type:'square', gain:0.08 }); },
+      chip(){
+        tone(880, { duration:0.06, type:'triangle', gain:0.14 });
+        tone(1320, { duration:0.05, type:'triangle', gain:0.08, delay:0.02 });
+      },
+      cardDeal(){ noiseBurst({ duration:0.12, gain:0.14, filterType:'highpass', filterFreq:1500 }); },
+      wheelTick(){ tone(300, { duration:0.03, type:'square', gain:0.05 }); },
+      mineSafe(){ tone(660, { duration:0.09, type:'sine', gain:0.16, freqEnd:990 }); },
+      mineExplosion(){
+        noiseBurst({ duration:0.5, gain:0.35, filterType:'lowpass', filterFreq:1800, filterFreqEnd:120 });
+        tone(90, { duration:0.4, type:'sawtooth', gain:0.18, freqEnd:30 });
+      },
+      win(amount){
+        // Bigger win, brighter/longer little arpeggio — capped so huge
+        // amounts don't stack absurdly many notes.
+        const notes = [523.25, 659.25, 783.99, 1046.5];
+        const count = Math.min(4, 2 + Math.floor(Math.log10(Math.max(amount,1))));
+        for(let i=0;i<count;i++){
+          tone(notes[i % notes.length], { duration:0.22, type:'triangle', gain:0.15, delay:i*0.09 });
+        }
+      },
+      lose(){ tone(220, { duration:0.28, type:'sine', gain:0.12, freqEnd:110 }); },
+      blackjackWin(){
+        [523.25, 659.25, 783.99, 1046.5, 1318.5].forEach((f,i)=>{
+          tone(f, { duration:0.28, type:'triangle', gain:0.15, delay:i*0.08 });
+        });
+      },
+      cashout(){
+        tone(700, { duration:0.16, type:'triangle', gain:0.16 });
+        tone(1050, { duration:0.22, type:'triangle', gain:0.14, delay:0.07 });
+      }
+    };
+  })();
+
+  document.addEventListener('click', () => Sound.unlock(), { once:true });
+
+  const soundToggleBtn = document.getElementById('soundToggleBtn');
+  function refreshSoundBtn(){
+    soundToggleBtn.textContent = Sound.isMuted() ? '🔇' : '🔊';
+    soundToggleBtn.classList.toggle('muted', Sound.isMuted());
+  }
+  refreshSoundBtn();
+  soundToggleBtn.addEventListener('click', () => {
+    Sound.setMuted(!Sound.isMuted());
+    refreshSoundBtn();
+  });
+
+  const wheelOrder = [0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26];
+  const redSet = new Set([1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]);
+  const segAngle = 360/wheelOrder.length;
+  function colorOf(n){ return n===0 ? 'green' : (redSet.has(n) ? 'red' : 'black'); }
+
+  // Mirrors src/game.js checkWin() — used only to highlight which number
+  // cells would win for a given outside/dozen/column bet on hover. The
+  // server is still the sole authority on actual round resolution.
+  function checkWinClient(key, n){
+    if(key.startsWith('num-')) return parseInt(key.slice(4),10) === n;
+    switch(key){
+      case 'red': return n!==0 && redSet.has(n);
+      case 'black': return n!==0 && !redSet.has(n);
+      case 'even': return n!==0 && n%2===0;
+      case 'odd': return n!==0 && n%2===1;
+      case 'low': return n>=1 && n<=18;
+      case 'high': return n>=19 && n<=36;
+      case 'dozen1': return n>=1 && n<=12;
+      case 'dozen2': return n>=13 && n<=24;
+      case 'dozen3': return n>=25 && n<=36;
+      case 'col1': return n!==0 && n%3===1;
+      case 'col2': return n!==0 && n%3===2;
+      case 'col3': return n!==0 && n%3===0;
+      default: return false;
+    }
+  }
+  const MAX_BET = 250;
+  const BACC_MAX_BET = 500;
+  const MINES_MAX_BET = 50;
+  const MAX_OUTCOMES = 3;
+
+  // Balances/winnings carry 2 decimal places server-side now — format them
+  // consistently everywhere instead of relying on default toLocaleString
+  // (which drops trailing zeros inconsistently).
+  function fmtMoney(n){
+    return Number(n).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  // Fix for stored XSS: nick, withdrawal card, and any other free-text
+  // field that ultimately comes from a player is untrusted and must never
+  // be interpolated into innerHTML raw — a player could put HTML/JS in
+  // their withdrawal card field (or, in principle, their nickname) and
+  // have it execute in an admin's session the moment they open the tickets
+  // list, right next to admin-only balance/role endpoints. Escape every
+  // such value before it goes into a template string destined for
+  // innerHTML.
+  function escapeHtml(str){
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  let currentUser = null;   // { id, nick, balance, role, code }
+  let stakeAmount = 10;
+  let spinning = false;
+  let currentRotation = 0;
+  let activeDepositId = null;
+  let rouletteFastMode = false;
+  let baccFastMode = false;
+
+  // CSRF double-submit token — handed to us by the server on login
+  // (/auth/spwmini) and on /api/me, must be echoed back on every
+  // mutating request or the server rejects it (see src/csrf.js).
+  let csrfToken = null;
+
+  async function api(method, url, body){
+    const headers = { 'Content-Type': 'application/json' };
+    if(method !== 'GET' && csrfToken) headers['X-CSRF-Token'] = csrfToken;
+    const res = await fetch(url, {
+      method,
+      headers,
+      credentials: 'same-origin',
+      body: body ? JSON.stringify(body) : undefined
+    });
+    let data = null;
+    try{ data = await res.json(); }catch(e){}
+    if(!res.ok) throw new Error((data && data.error) || 'Ошибка запроса');
+    if(data && typeof data.csrfToken === 'string') csrfToken = data.csrfToken;
+    return data;
+  }
+
+  // ---------- Auth / user box ----------
+  const authButtons = document.getElementById('authButtons');
+  const userBox = document.getElementById('userBox');
+  const whoName = document.getElementById('whoName');
+  const whoBalance = document.getElementById('whoBalance');
+  const whoCode = document.getElementById('whoCode');
+  const adminBtn = document.getElementById('adminBtn');
+
+  function refreshAuthUI(){
+    if(currentUser){
+      authButtons.style.display = 'none';
+      userBox.style.display = 'grid';
+      whoName.textContent = currentUser.nick;
+      whoBalance.textContent = fmtMoney(currentUser.balance);
+      whoCode.textContent = 'Код: ' + currentUser.code;
+      adminBtn.style.display = currentUser.role === 'admin' ? 'inline-block' : 'none';
+    } else {
+      authButtons.style.display = 'flex';
+      userBox.style.display = 'none';
+    }
+  }
+
+  async function loadMe(){
+    const data = await api('GET', '/api/me');
+    currentUser = data.user;
+    refreshAuthUI();
+  }
+
+  function requireLogin(){
+    if(!currentUser){ flashMessage('Идёт авторизация через SPWorlds, подождите…'); return false; }
+    return true;
+  }
+
+  // ---------- SPWorlds Mini App auth ----------
+  // No registration/login screen at all: the app is only ever opened
+  // embedded inside spworlds.ru, which hands us the player's signed
+  // identity via postMessage. We verify it server-side and the player is
+  // playing under their spworlds account immediately.
+  //
+  // Fill in your app's public ID from its spworlds.ru/.../apps/<id> page.
+  const SPWMINI_APP_ID = 'REPLACE_WITH_YOUR_SPWORLDS_APP_ID';
+  let spm = null;
+
+  function setAuthStatus(text, isError){
+    authButtons.style.display = 'flex';
+    const el = document.getElementById('spwminiAuthStatus');
+    el.textContent = text;
+    el.classList.toggle('error', !!isError);
+  }
+
+  async function spwminiLogin(){
+    const { default: SPWMini } = await import('https://cdn.jsdelivr.net/npm/spwmini@1.2.0/dist/client.mjs');
+    spm = new SPWMini(SPWMINI_APP_ID);
+
+    const user = await new Promise((resolve, reject)=>{
+      const timeout = setTimeout(()=>{
+        reject(new Error('Нет ответа от SPWorlds. Откройте это приложение через spworlds.ru'));
+      }, 8000);
+      spm.on('initResponse', (u)=>{ clearTimeout(timeout); resolve(u); });
+      spm.on('initError', (msg)=>{ clearTimeout(timeout); reject(new Error(msg || 'Ошибка авторизации SPWorlds')); });
+    });
+
+    await api('POST', '/auth/spwmini', user);
+  }
+
+  function flashMessage(msg){
+    const resultText = document.getElementById('resultText');
+    const prev = resultText.textContent;
+    resultText.textContent = msg;
+    setTimeout(()=>{ if(!spinning) resultText.textContent = prev; }, 1800);
+  }
+
+  // ---------- Win popup: big green banner, shown on any win in any mode ----------
+  const winPopupEl = document.getElementById('winPopup');
+  const winPopupAmountEl = document.getElementById('winPopupAmount');
+  const winPopupModeEl = document.getElementById('winPopupMode');
+  let winPopupTimer = null;
+  function showWinPopup(amount, modeName){
+    if(!(amount > 0)) return;
+    winPopupAmountEl.textContent = '+' + fmtMoney(amount);
+    winPopupModeEl.textContent = modeName;
+    winPopupEl.classList.remove('show');
+    void winPopupEl.offsetWidth; // restart animation if triggered again quickly
+    winPopupEl.classList.add('show');
+    if(winPopupTimer) clearTimeout(winPopupTimer);
+    winPopupTimer = setTimeout(()=>winPopupEl.classList.remove('show'), 2500);
+  }
+
+  // ---------- Build wheel ----------
+  const wheel = document.getElementById('wheel');
+  const halfSeg = segAngle/2;
+  let stops = [];
+  wheelOrder.forEach((n,i)=>{
+    const c = colorOf(n)==='red' ? '#c0392b' : colorOf(n)==='black' ? '#1a1a1a' : '#2f8f5b';
+    stops.push(`${c} ${(i*segAngle).toFixed(3)}deg ${((i+1)*segAngle).toFixed(3)}deg`);
+  });
+  wheel.style.background = `conic-gradient(from ${(-halfSeg).toFixed(3)}deg, ${stops.join(',')})`;
+  wheelOrder.forEach((n,i)=>{
+    const pocket = document.createElement('div');
+    pocket.className = 'pocket';
+    pocket.style.transform = `rotate(${i*segAngle}deg)`;
+    const num = document.createElement('div');
+    num.className = 'num';
+    num.textContent = n;
+    pocket.appendChild(num);
+    wheel.appendChild(pocket);
+  });
+  wheelOrder.forEach((n,i)=>{
+    const pin = document.createElement('div');
+    pin.className = 'pin';
+    pin.style.transform = `rotate(${i*segAngle - halfSeg}deg)`;
+    const dot = document.createElement('i');
+    pin.appendChild(dot);
+    wheel.appendChild(pin);
+  });
+  const pointer = document.getElementById('pointer');
+
+  // ---------- Build betting table ----------
+  const numGrid = document.getElementById('numGrid');
+  const zeroCell = document.createElement('div');
+  zeroCell.className = 'cell zero green';
+  zeroCell.textContent = '0';
+  zeroCell.dataset.betkey = 'num-0';
+  numGrid.appendChild(zeroCell);
+  for(let c=1;c<=12;c++){
+    for(let r=1;r<=3;r++){
+      const n = r===1 ? 3*c : r===2 ? 3*c-1 : 3*c-2;
+      const cell = document.createElement('div');
+      cell.className = 'cell ' + colorOf(n);
+      cell.textContent = n;
+      cell.style.gridColumn = (c+1);
+      cell.style.gridRow = r;
+      cell.dataset.betkey = 'num-'+n;
+      numGrid.appendChild(cell);
+    }
+  }
+  const columnBets = document.getElementById('columnBets');
+  [['col3',1],['col2',2],['col1',3]].forEach(([key])=>{
+    const cell = document.createElement('div');
+    cell.className = 'cell outside';
+    cell.textContent = '1:3';
+    cell.dataset.betkey = key;
+    columnBets.appendChild(cell);
+  });
+  const dozens = document.getElementById('dozens');
+  const dSpacer = document.createElement('div'); dSpacer.className='spacer'; dozens.appendChild(dSpacer);
+  [['dozen1','1 - 12'],['dozen2','13 - 24'],['dozen3','25 - 36']].forEach(([key,label])=>{
+    const cell = document.createElement('div');
+    cell.className = 'cell outside';
+    cell.textContent = label;
+    cell.dataset.betkey = key;
+    dozens.appendChild(cell);
+  });
+  const outsideBets = document.getElementById('outsideBets');
+  const oSpacer = document.createElement('div'); oSpacer.className='spacer'; outsideBets.appendChild(oSpacer);
+  [
+    {key:'low', html:'1 - 18'}, {key:'even', html:'EVEN'},
+    {key:'red', html:'<span class="diamond"></span>'}, {key:'black', html:'<span class="diamond blk"></span>'},
+    {key:'odd', html:'ODD'}, {key:'high', html:'19 - 36'}
+  ].forEach(def=>{
+    const cell = document.createElement('div');
+    cell.className = 'cell outside';
+    cell.innerHTML = def.html;
+    cell.dataset.betkey = def.key;
+    outsideBets.appendChild(cell);
+  });
+
+  // ---------- Stake input ----------
+  const stakeInput = document.getElementById('stakeInput');
+  function clampStake(){
+    let v = parseInt(stakeInput.value,10);
+    if(isNaN(v) || v<1) v = 1;
+    if(v>MAX_BET) v = MAX_BET;
+    stakeInput.value = v;
+    stakeAmount = v;
+  }
+  stakeInput.addEventListener('change', clampStake);
+  document.querySelectorAll('#controls .preset-btn[data-val]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{ stakeInput.value = btn.dataset.val; clampStake(); Sound.click(); });
+  });
+
+  // ---------- Local bet slip (roulette is now a private, per-player game:
+  // clicking a cell only builds up a slip in the browser: nothing is sent
+  // to the server, and no balance is touched, until "Крутить" is pressed).
+  // The slip is NOT cleared after a spin resolves — bets carry over to the
+  // next round automatically, so the player can just hit "Крутить" again. ----------
+  let localBets = new Map();  // key -> amount
+  let localBetLog = [];       // ordered list of keys, for "Отменить" (undo last)
+  let rouletteSpinBusy = false; // locked the instant "Крутить" is clicked — see spinBtn handler below
+
+  const betTotalEl = document.getElementById('betTotal');
+  function renderLocalBets(){
+    document.querySelectorAll('#rouletteGame .chip-badge').forEach(b=>b.remove());
+    let total = 0;
+    localBets.forEach((amount, key)=>{
+      total += amount;
+      const cellEl = document.querySelector(`#rouletteGame [data-betkey="${key}"]`);
+      if(cellEl){
+        const badge = document.createElement('div');
+        badge.className = 'chip-badge';
+        badge.textContent = amount;
+        cellEl.appendChild(badge);
+      }
+    });
+    betTotalEl.textContent = 'Ставка: ' + fmtMoney(total);
+  }
+
+  function placeBet(cell){
+    if(spinning || rouletteSpinBusy) return;
+    if(!requireLogin()) return;
+    clampStake();
+    const key = cell.dataset.betkey;
+    const already = localBets.get(key) || 0;
+    if(already === 0 && localBets.size >= MAX_OUTCOMES){
+      flashMessage(`Максимум ${MAX_OUTCOMES} исхода за раунд`);
+      return;
+    }
+    if(already + stakeAmount > MAX_BET){
+      flashMessage(`Максимум на поле: ${MAX_BET}`);
+      return;
+    }
+    localBets.set(key, already + stakeAmount);
+    localBetLog.push(key);
+    renderLocalBets();
+    Sound.chip();
+  }
+  document.querySelectorAll('#rouletteGame [data-betkey]').forEach(cell=>{
+    cell.addEventListener('click', ()=>placeBet(cell));
+  });
+
+  document.getElementById('cancelLastBtn').addEventListener('click', ()=>{
+    if(spinning || rouletteSpinBusy) return;
+    const key = localBetLog.pop();
+    if(key === undefined) return;
+    const cur = localBets.get(key) || 0;
+    if(cur <= stakeAmount) localBets.delete(key);
+    else localBets.set(key, cur - stakeAmount);
+    renderLocalBets();
+    Sound.click();
+  });
+
+  // ---------- Hover highlight: outline winning number cells in purple ----------
+  const allNumberCells = Array.from(document.querySelectorAll('#numGrid [data-betkey]'));
+  document.querySelectorAll('#rouletteGame [data-betkey]').forEach(cell=>{
+    const key = cell.dataset.betkey;
+    cell.addEventListener('mouseenter', ()=>{
+      allNumberCells.forEach(numCell=>{
+        const n = parseInt(numCell.dataset.betkey.slice(4),10);
+        if(checkWinClient(key, n)) numCell.classList.add('hover-win');
+      });
+    });
+    cell.addEventListener('mouseleave', ()=>{
+      allNumberCells.forEach(numCell=>numCell.classList.remove('hover-win'));
+    });
+  });
+
+  // ---------- History strip ----------
+  const historyEl = document.getElementById('history');
+  function addHistoryChip(n){
+    const c = colorOf(n);
+    const chip = document.createElement('div');
+    chip.className = 'hist-chip';
+    chip.textContent = n;
+    chip.style.background = c==='red' ? 'var(--red)' : c==='black' ? '#222' : 'var(--green)';
+    chip.style.color = '#fff';
+    historyEl.prepend(chip);
+    while(historyEl.children.length > 14) historyEl.removeChild(historyEl.lastChild);
+  }
+
+  // ---------- Wheel spin ----------
+  let tickTimer = null;
+  function startTicking(durationMs){
+    let interval = 40;
+    const start = performance.now();
+    function tick(){
+      if(!spinning) return;
+      pointer.classList.remove('shake');
+      void pointer.offsetWidth;
+      pointer.classList.add('shake');
+      Sound.wheelTick();
+      const t = performance.now() - start;
+      const progress = Math.min(t/durationMs, 1);
+      interval = 40 + Math.pow(progress,2.2) * 260;
+      if(progress < 1) tickTimer = setTimeout(tick, interval);
+    }
+    tickTimer = setTimeout(tick, interval);
+  }
+
+  function spinWheelTo(winNumber){
+    spinning = true;
+    document.querySelectorAll('.win-flash').forEach(c=>c.classList.remove('win-flash'));
+    document.getElementById('resultNum').style.display = 'none';
+    document.getElementById('resultText').classList.remove('loss');
+    document.getElementById('resultText').textContent = 'Крутим...';
+
+    const winIndex = wheelOrder.indexOf(winNumber);
+    const spins = rouletteFastMode ? 2 : 6 + Math.floor(Math.random()*3);
+    const targetMod = ((-winIndex*segAngle) % 360 + 360) % 360;
+    const curMod = ((currentRotation % 360) + 360) % 360;
+    const extra = ((targetMod - curMod) + 360) % 360;
+    const newRotation = currentRotation + spins*360 + extra;
+    const duration = rouletteFastMode ? 1500 : 5200;
+    wheel.style.transition = `transform ${duration}ms cubic-bezier(.17,.67,.24,1)`;
+    wheel.style.transform = `rotate(${newRotation}deg)`;
+    currentRotation = newRotation;
+    startTicking(duration);
+
+    setTimeout(()=>{
+      spinning = false;
+      clearTimeout(tickTimer);
+      pointer.classList.remove('shake');
+    }, duration + 150);
+
+    return duration;
+  }
+
+  document.getElementById('rouletteFastModeToggle').addEventListener('change', (e)=>{
+    rouletteFastMode = e.target.checked;
+  });
+
+  document.getElementById('spinBtn').addEventListener('click', async (e)=>{
+    if(rouletteSpinBusy || spinning) return;
+    if(!requireLogin()) return;
+    if(localBets.size === 0){ flashMessage('Сделайте хотя бы одну ставку'); return; }
+    const spinBtnEl = e.currentTarget; // captured now — e.currentTarget itself becomes null after the event finishes dispatching, i.e. as soon as we hit the first `await` below, so it can't be read again later in this handler
+    rouletteSpinBusy = true;
+    spinBtnEl.disabled = true;
+    Sound.click();
+    const bets = Array.from(localBets.entries()).map(([key, amount])=>({ key, amount }));
+    let data;
+    try{
+      data = await api('POST', '/api/game/spin', { bets });
+    }catch(err){
+      flashMessage(err.message);
+      rouletteSpinBusy = false;
+      spinBtnEl.disabled = false;
+      return;
+    }
+    rouletteSpinBusy = false; // the wheel's own `spinning` flag takes over from here
+    spinBtnEl.disabled = false;
+
+    const duration = spinWheelTo(data.number);
+    setTimeout(()=>{
+      const resultNumEl = document.getElementById('resultNum');
+      const resultTextEl = document.getElementById('resultText');
+      const c = data.color;
+      resultNumEl.style.display = 'flex';
+      resultNumEl.textContent = data.number;
+      resultNumEl.style.background = c==='red' ? 'var(--red)' : c==='black' ? '#222' : 'var(--green)';
+      resultNumEl.style.color = '#fff';
+
+      if(data.winnings > 0){
+        data.bets.forEach(b=>{
+          const cellEl = document.querySelector(`#rouletteGame [data-betkey="${b.key}"]`);
+          if(cellEl) cellEl.classList.add('win-flash');
+        });
+        resultTextEl.classList.remove('loss');
+        resultTextEl.textContent = `Выигрыш! Число ${data.number}. Выплата: ${fmtMoney(data.winnings)}`;
+        showWinPopup(data.winnings, 'Рулетка');
+        Sound.win(data.winnings);
+      } else {
+        resultTextEl.classList.add('loss');
+        resultTextEl.textContent = `Проигрыш. Выпало число ${data.number}.`;
+        Sound.lose();
+      }
+
+      addHistoryChip(data.number);
+      loadMe();
+    }, duration + 150);
+  });
+
+  // ---------- Baccarat ----------
+  let baccStakeAmount = 10;
+
+  const baccStakeInput = document.getElementById('baccStakeInput');
+  function baccClampStake(){
+    let v = parseInt(baccStakeInput.value,10);
+    if(isNaN(v) || v<1) v = 1;
+    if(v>BACC_MAX_BET) v = BACC_MAX_BET;
+    baccStakeInput.value = v;
+    baccStakeAmount = v;
+  }
+  baccStakeInput.addEventListener('change', baccClampStake);
+  document.querySelectorAll('#baccControls .preset-btn[data-baccval]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{ baccStakeInput.value = btn.dataset.baccval; baccClampStake(); Sound.click(); });
+  });
+
+  // ---------- Local bet slip (same private, per-player model as roulette:
+  // clicking Player/Banker/Tie only builds up a slip locally — nothing is
+  // sent to the server, and no balance is touched, until "Играть" is
+  // pressed) ----------
+  let baccLocalBets = new Map(); // key -> amount
+  let baccLocalBetLog = [];      // ordered list of keys, for "Отменить"
+  let baccLastOwnBets = [];      // bets from the last resolved hand
+
+  const baccBetTotalEl = document.getElementById('baccBetTotal');
+  function renderBaccLocalBets(){
+    document.querySelectorAll('#baccaratGame .chip-badge').forEach(b=>b.remove());
+    let total = 0;
+    baccLocalBets.forEach((amount, key)=>{
+      total += amount;
+      const cellEl = document.querySelector(`#baccaratGame [data-betkey="${key}"]`);
+      if(cellEl){
+        const badge = document.createElement('div');
+        badge.className = 'chip-badge';
+        badge.textContent = amount;
+        cellEl.appendChild(badge);
+      }
+    });
+    baccBetTotalEl.textContent = 'Ставка: ' + fmtMoney(total);
+  }
+
+  function baccPlaceBet(cell){
+    if(!requireLogin()) return;
+    baccClampStake();
+    const key = cell.dataset.betkey;
+    const already = baccLocalBets.get(key) || 0;
+    if(already === 0 && baccLocalBets.size >= 1){
+      flashMessage('Можно поставить только на один исход за раз');
+      return;
+    }
+    if(already + baccStakeAmount > BACC_MAX_BET){
+      flashMessage(`Максимум на поле: ${BACC_MAX_BET}`);
+      return;
+    }
+    baccLocalBets.set(key, already + baccStakeAmount);
+    baccLocalBetLog.push(key);
+    renderBaccLocalBets();
+    Sound.chip();
+  }
+  document.querySelectorAll('#baccaratGame [data-betkey]').forEach(cell=>{
+    cell.addEventListener('click', ()=>baccPlaceBet(cell));
+  });
+
+  document.getElementById('baccCancelLastBtn').addEventListener('click', ()=>{
+    const key = baccLocalBetLog.pop();
+    if(key === undefined) return;
+    const cur = baccLocalBets.get(key) || 0;
+    if(cur <= baccStakeAmount) baccLocalBets.delete(key);
+    else baccLocalBets.set(key, cur - baccStakeAmount);
+    renderBaccLocalBets();
+    Sound.click();
+  });
+
+  function renderCardEl(card){
+    const el = document.createElement('div');
+    const isRed = card.suit === '♥' || card.suit === '♦';
+    el.className = 'bacc-card ' + (isRed ? 'red' : 'black');
+    el.innerHTML = `${card.rank}<span style="font-size:29px;">${card.suit}</span>`;
+    return el;
+  }
+
+  // Idle table look: 2 face-down cards per hand, shown on load, on
+  // switching into Baccarat mode, and again a few seconds after a round
+  // resolves — so the table never sits there with an empty/blank felt.
+  function baccShowIdleBacks(){
+    const bankerCardsEl = document.getElementById('baccBankerCards');
+    const playerCardsEl = document.getElementById('baccPlayerCards');
+    bankerCardsEl.innerHTML = '';
+    playerCardsEl.innerHTML = '';
+    for(let i=0;i<2;i++){
+      const pBack = document.createElement('div');
+      pBack.className = 'bacc-card back';
+      playerCardsEl.appendChild(pBack);
+      const bBack = document.createElement('div');
+      bBack.className = 'bacc-card back';
+      bankerCardsEl.appendChild(bBack);
+    }
+    document.getElementById('baccPlayerTotal').textContent = '—';
+    document.getElementById('baccBankerTotal').textContent = '—';
+  }
+  baccShowIdleBacks();
+  let baccIdleResetTimer = null;
+
+  function baccHistoryChip(outcome){
+    const chip = document.createElement('div');
+    chip.className = 'hist-chip';
+    chip.textContent = outcome==='player' ? 'И' : outcome==='banker' ? 'Б' : 'Н';
+    chip.style.background = outcome==='player' ? 'var(--blue)' : outcome==='banker' ? 'var(--red)' : 'var(--green)';
+    chip.style.color = '#fff';
+    baccHistoryEl.prepend(chip);
+    while(baccHistoryEl.children.length > 14) baccHistoryEl.removeChild(baccHistoryEl.lastChild);
+  }
+  const baccHistoryEl = document.getElementById('baccHistory');
+
+  function handRunningTotal(cards){
+    return cards.reduce((s,c)=>s+c.value, 0) % 10;
+  }
+
+  let baccPlaying = false;
+  document.getElementById('baccFastModeToggle').addEventListener('change', (e)=>{
+    baccFastMode = e.target.checked;
+  });
+  document.getElementById('baccPlayBtn').addEventListener('click', async ()=>{
+    if(baccPlaying) return;
+    if(!requireLogin()) return;
+    if(baccLocalBets.size === 0){ flashMessage('Сделайте хотя бы одну ставку'); return; }
+    const baccPlayBtnEl = document.getElementById('baccPlayBtn'); // fetched fresh, not from the event — captured before the first await either way is fine here since it's a plain getElementById call, not event.currentTarget
+    baccPlaying = true; // locked instantly on click — closes the same race window roulette had, where checking this flag only after the server responds let rapid clicks slip through and fire multiple parallel /api/baccarat/play requests
+    baccPlayBtnEl.disabled = true;
+    Sound.click();
+    const bets = Array.from(baccLocalBets.entries()).map(([key, amount])=>({ key, amount }));
+    let data;
+    try{
+      data = await api('POST', '/api/baccarat/play', { bets });
+    }catch(err){
+      flashMessage(err.message);
+      baccPlaying = false;
+      baccPlayBtnEl.disabled = false;
+      return;
+    }
+    baccLastOwnBets = bets.slice();
+    baccLocalBets = new Map();
+    baccLocalBetLog = [];
+    renderBaccLocalBets();
+
+    if(baccIdleResetTimer){ clearTimeout(baccIdleResetTimer); baccIdleResetTimer = null; }
+    const bankerCardsEl = document.getElementById('baccBankerCards');
+    const playerCardsEl = document.getElementById('baccPlayerCards');
+    const bankerTotalEl = document.getElementById('baccBankerTotal');
+    const playerTotalEl = document.getElementById('baccPlayerTotal');
+    bankerCardsEl.innerHTML = '';
+    playerCardsEl.innerHTML = '';
+    bankerTotalEl.textContent = '—';
+    playerTotalEl.textContent = '—';
+
+    // Deal in real order (Player, Banker, Player, Banker, [3rd cards]),
+    // slowing right down before a third card — that's the dramatic moment
+    // in baccarat, so it gets a noticeably longer pause than the first four.
+    // Fast mode collapses all of that to zero — every card lands at once.
+    const GAP = baccFastMode ? 0 : 700;
+    const SUSPENSE_GAP = baccFastMode ? 0 : 1400;
+    const dealtPlayer = [];
+    const dealtBanker = [];
+    let t = 0;
+
+    function schedule(hand, card, delay){
+      setTimeout(()=>{
+        Sound.cardDeal();
+        if(hand==='player'){
+          playerCardsEl.appendChild(renderCardEl(card));
+          dealtPlayer.push(card);
+          playerTotalEl.textContent = handRunningTotal(dealtPlayer);
+        } else {
+          bankerCardsEl.appendChild(renderCardEl(card));
+          dealtBanker.push(card);
+          bankerTotalEl.textContent = handRunningTotal(dealtBanker);
+        }
+      }, delay);
+    }
+
+    schedule('player', data.playerCards[0], t); t += GAP;
+    schedule('banker', data.bankerCards[0], t); t += GAP;
+    schedule('player', data.playerCards[1], t); t += GAP;
+    schedule('banker', data.bankerCards[1], t); t += GAP;
+    if(data.playerCards[2]){ t += SUSPENSE_GAP; schedule('player', data.playerCards[2], t); }
+    if(data.bankerCards[2]){ t += SUSPENSE_GAP; schedule('banker', data.bankerCards[2], t); }
+    const finalRevealDelay = t + (baccFastMode ? 150 : 700);
+
+    const resultTextEl = document.getElementById('baccResultText');
+    setTimeout(()=>{
+      const outcomeLabel = data.outcome==='player' ? 'Игрок' : data.outcome==='banker' ? 'Банкир' : 'Ничья';
+      if(data.winnings > 0){
+        data.bets.forEach(b=>{
+          const cellEl = document.querySelector(`#baccaratGame [data-betkey="${b.key}"]`);
+          if(cellEl) cellEl.classList.add('win-flash');
+        });
+        resultTextEl.classList.remove('loss');
+        resultTextEl.textContent = `Победил: ${outcomeLabel} (${data.playerTotal}:${data.bankerTotal}). Выплата: ${fmtMoney(data.winnings)}`;
+        showWinPopup(data.winnings, 'Баккара');
+        Sound.win(data.winnings);
+      } else {
+        resultTextEl.classList.add('loss');
+        resultTextEl.textContent = `Проигрыш. Победил: ${outcomeLabel} (${data.playerTotal}:${data.bankerTotal}).`;
+        Sound.lose();
+      }
+
+      baccHistoryChip(data.outcome);
+      loadMe();
+      baccPlaying = false;
+      baccPlayBtnEl.disabled = false;
+      // A few seconds after the result is shown, reset the felt to the
+      // face-down idle look so the table doesn't just sit there showing
+      // last hand's open cards while the player decides their next bet.
+      baccIdleResetTimer = setTimeout(baccShowIdleBacks, 4000);
+    }, finalRevealDelay);
+  });
+
+  // ---------- Admin modal ----------
+  const adminModal = document.getElementById('adminModal');
+  adminBtn.addEventListener('click', async ()=>{
+    await renderAdminPlayers();
+    await renderAdminDeposits();
+    await renderAdminWithdrawals();
+    adminModal.querySelectorAll('.admin-tab').forEach(t=>t.classList.remove('active'));
+    adminModal.querySelectorAll('.admin-pane').forEach(p=>p.classList.remove('active'));
+    adminModal.querySelector('[data-pane="panePlayers"]').classList.add('active');
+    document.getElementById('panePlayers').classList.add('active');
+    adminModal.querySelectorAll('.sub-tab').forEach(t=>t.classList.remove('active'));
+    adminModal.querySelectorAll('.sub-pane').forEach(p=>p.classList.remove('active'));
+    adminModal.querySelectorAll('[data-sub="depActive"], [data-sub="wdActive"]').forEach(t=>t.classList.add('active'));
+    document.getElementById('depActive').classList.add('active');
+    document.getElementById('wdActive').classList.add('active');
+    adminModal.classList.add('open');
+  });
+  document.getElementById('adminClose').addEventListener('click', ()=>adminModal.classList.remove('open'));
+  adminModal.addEventListener('click', (e)=>{ if(e.target===adminModal) adminModal.classList.remove('open'); });
+
+  document.querySelectorAll('.admin-tab').forEach(tab=>{
+    tab.addEventListener('click', ()=>{
+      document.querySelectorAll('.admin-tab').forEach(t=>t.classList.remove('active'));
+      document.querySelectorAll('.admin-pane').forEach(p=>p.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById(tab.dataset.pane).classList.add('active');
+    });
+  });
+  document.querySelectorAll('.sub-tab').forEach(tab=>{
+    tab.addEventListener('click', ()=>{
+      document.querySelectorAll('.sub-tab').forEach(t=>t.classList.remove('active'));
+      document.querySelectorAll('.sub-pane').forEach(p=>p.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById(tab.dataset.sub).classList.add('active');
+    });
+  });
+
+  async function renderAdminPlayers(){
+    const players = await api('GET', '/api/admin/players');
+    const body = document.getElementById('playersTableBody');
+    body.innerHTML = players.length
+      ? players.map(p=>`<tr><td>${escapeHtml(p.nick)}</td><td>${escapeHtml(p.code)}</td><td>${fmtMoney(p.balance)}</td><td>${p.role==='admin'?'Админ':'Игрок'}</td></tr>`).join('')
+      : '<tr><td colspan="4">Пока нет игроков</td></tr>';
+  }
+
+  document.getElementById('creditSubmit').addEventListener('click', async ()=>{
+    const target = document.getElementById('creditNick').value.trim();
+    const amount = parseInt(document.getElementById('creditAmount').value, 10);
+    const errEl = document.getElementById('creditErr');
+    try{
+      await api('POST', '/api/admin/credit', { target, amount });
+      errEl.textContent = '';
+      document.getElementById('creditAmount').value = '';
+      await renderAdminPlayers();
+      if(currentUser) await loadMe();
+    }catch(err){ errEl.textContent = err.message; }
+  });
+
+  async function setRole(role){
+    const target = document.getElementById('roleNick').value.trim();
+    const errEl = document.getElementById('roleErr');
+    try{
+      await api('POST', '/api/admin/role', { target, role });
+      errEl.textContent = '';
+      document.getElementById('roleNick').value = '';
+      await renderAdminPlayers();
+    }catch(err){ errEl.textContent = err.message; }
+  }
+  document.getElementById('roleGrantSubmit').addEventListener('click', ()=>setRole('admin'));
+  document.getElementById('roleRevokeSubmit').addEventListener('click', ()=>setRole('player'));
+
+  function statusLabelClient(s){
+    return {
+      pending:'Ожидает оплаты', paid_pending:'Оплачено, ждёт подтверждения', completed:'Выполнено',
+      cancelled_admin:'Отменено админом', cancelled_player:'Отменено игроком', expired:'Истекло'
+    }[s] || s;
+  }
+
+  async function renderAdminDeposits(){
+    const { active, history } = await api('GET', '/api/admin/deposits');
+    const activeEl = document.getElementById('depActive');
+    activeEl.innerHTML = active.length ? '' : '<div class="empty-note">Активных заявок нет</div>';
+    active.forEach(d=>{
+      const remainTxt = d.status==='paid_pending' ? 'Ожидает подтверждения' : ('Осталось: ' + Math.max(0,Math.ceil((d.expiresAt-Date.now())/1000)) + ' сек');
+      const row = document.createElement('div');
+      row.className = 'ticket' + (d.status==='paid_pending' ? ' paid' : '');
+      row.innerHTML = `
+        <div class="ticket-top"><span class="ticket-nick">${escapeHtml(d.nick)}</span><span class="ticket-amount">${d.amount.toLocaleString('ru-RU')}</span></div>
+        <div class="ticket-meta">${remainTxt}</div>
+        <div class="ticket-actions">
+          <button class="btn-green" data-act="fund" data-id="${d.id}">Пополнить</button>
+          <button class="btn-red" data-act="cancel" data-id="${d.id}">Отменить</button>
+        </div>`;
+      activeEl.appendChild(row);
+    });
+    const historyEl2 = document.getElementById('depHistory');
+    historyEl2.innerHTML = history.length ? '' : '<div class="empty-note">История пуста</div>';
+    history.sort((a,b)=>b.createdAt-a.createdAt).forEach(d=>{
+      const row = document.createElement('div');
+      row.className = 'history-row';
+      row.innerHTML = `<span>${escapeHtml(d.nick)}</span><span class="hs-amount">${d.amount.toLocaleString('ru-RU')}</span><span class="hs-status">${statusLabelClient(d.status)}</span>`;
+      historyEl2.appendChild(row);
+    });
+  }
+
+  document.getElementById('depActive').addEventListener('click', async (e)=>{
+    const btn = e.target.closest('button[data-act]');
+    if(!btn) return;
+    const id = btn.dataset.id;
+    const act = btn.dataset.act === 'fund' ? 'fund' : 'reject';
+    await api('POST', `/api/admin/deposits/${id}/${act}`);
+    await renderAdminDeposits();
+    await renderAdminPlayers();
+  });
+
+  async function renderAdminWithdrawals(){
+    const { active, history } = await api('GET', '/api/admin/withdrawals');
+    const activeEl = document.getElementById('wdActive');
+    activeEl.innerHTML = active.length ? '' : '<div class="empty-note">Активных заявок на вывод нет</div>';
+    active.forEach(w=>{
+      const row = document.createElement('div');
+      row.className = 'ticket';
+      // 'processing' should only ever flash by for a moment (automatic
+      // payout in flight) — if it's actually visible here, the payout
+      // attempt got interrupted (e.g. a server crash) and needs a human
+      // to check spworlds' own transaction history and resolve it one
+      // way or the other, hence the extra status line + Вернуть button.
+      const stuckNote = w.status === 'processing'
+        ? `<div class="ticket-meta">⚠️ ${w.statusLabel} — если платёж завис, проверьте историю карты на spworlds.ru</div>`
+        : '';
+      row.innerHTML = `
+        <div class="ticket-top"><span class="ticket-nick">${escapeHtml(w.nick)}</span><span class="ticket-amount">${w.amount.toLocaleString('ru-RU')}</span></div>
+        <div class="ticket-meta">Карта: ${escapeHtml(w.card)}</div>
+        ${stuckNote}
+        <div class="ticket-actions">
+          <button class="btn-green" data-act="paid" data-id="${w.id}">Выплачено</button>
+          ${w.status === 'processing' ? `<button class="btn-red" data-act="refund" data-id="${w.id}">Вернуть</button>` : ''}
+        </div>`;
+      activeEl.appendChild(row);
+    });
+
+    const historyEl3 = document.getElementById('wdHistory');
+    historyEl3.innerHTML = history.length ? '' : '<div class="empty-note">История пуста</div>';
+    history.sort((a,b)=>b.createdAt-a.createdAt).forEach(w=>{
+      const row = document.createElement('div');
+      row.className = 'history-row';
+      row.innerHTML = `<span>${escapeHtml(w.nick)}</span><span class="hs-amount">${w.amount.toLocaleString('ru-RU')}</span><span class="hs-status">${w.statusLabel}</span>`;
+      historyEl3.appendChild(row);
+    });
+  }
+  document.getElementById('wdActive').addEventListener('click', async (e)=>{
+    const btn = e.target.closest('button[data-id]');
+    if(!btn) return;
+    await api('POST', `/api/admin/withdrawals/${btn.dataset.id}/${btn.dataset.act}`);
+    await renderAdminWithdrawals();
+  });
+
+  // ---------- Statistics reports (download) ----------
+  async function downloadReport(btn, url, fallbackFilename){
+    const originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.querySelector('.stats-report-name').textContent = 'Формируем файл…';
+    try{
+      const res = await fetch(url, { credentials:'same-origin' });
+      if(!res.ok){
+        const body = await res.json().catch(()=>({}));
+        throw new Error(body.error || `Ошибка ${res.status}`);
+      }
+      const blob = await res.blob();
+      const disposition = res.headers.get('Content-Disposition') || '';
+      const match = /filename="?([^"]+)"?/.exec(disposition);
+      const filename = match ? match[1] : fallbackFilename;
+      const link = document.createElement('a');
+      const objectUrl = URL.createObjectURL(blob);
+      link.href = objectUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(objectUrl);
+    }catch(err){
+      flashMessage(err.message || 'Не удалось скачать отчёт');
+    }finally{
+      btn.disabled = false;
+      btn.innerHTML = originalHtml;
+    }
+  }
+  document.getElementById('statsFull1dBtn').addEventListener('click', (e)=>{
+    downloadReport(e.currentTarget, '/api/admin/stats/full-1d', 'Full-stats-1D.txt');
+  });
+  document.getElementById('stats7dBtn').addEventListener('click', (e)=>{
+    downloadReport(e.currentTarget, '/api/admin/stats/7d', 'Stats-7D.xlsx');
+  });
+  document.getElementById('statsAllBtn').addEventListener('click', (e)=>{
+    downloadReport(e.currentTarget, '/api/admin/stats/all', 'Stats-All.xlsx');
+  });
+
+  // ---------- Deposit modal ----------
+  const depositModal = document.getElementById('depositModal');
+  const depStageAmount = document.getElementById('depStageAmount');
+  const depStageWaiting = document.getElementById('depStageWaiting');
+  let depPollInterval = null;
+
+  function stopDepPolling(){
+    if(depPollInterval){ clearInterval(depPollInterval); depPollInterval = null; }
+  }
+
+  function resetDepositModal(){
+    depStageAmount.style.display = 'block';
+    depStageWaiting.style.display = 'none';
+    document.getElementById('depAmountInput').value = '';
+    document.getElementById('depAmountErr').textContent = '';
+    stopDepPolling();
+  }
+  document.getElementById('depositBtn').addEventListener('click', ()=>{
+    if(!requireLogin()) return;
+    resetDepositModal();
+    depositModal.classList.add('open');
+  });
+  document.getElementById('depositClose').addEventListener('click', ()=>{ stopDepPolling(); depositModal.classList.remove('open'); });
+  depositModal.addEventListener('click', (e)=>{ if(e.target===depositModal){ stopDepPolling(); depositModal.classList.remove('open'); } });
+
+  // Entering an amount creates the transaction on our server, then opens
+  // SPWorlds' own payment popup for it via the mini app SDK — the player
+  // never sees our old manual card/comment instructions, they just pay
+  // inside spworlds' native UI. Balance crediting still happens through
+  // our webhook once spworlds confirms the transfer (see
+  // src/routes-webhooks.js), so we poll deposit status the same way as
+  // before while that popup is open.
+  document.getElementById('depAmountSubmit').addEventListener('click', async ()=>{
+    const amount = parseInt(document.getElementById('depAmountInput').value, 10);
+    const errEl = document.getElementById('depAmountErr');
+    if(isNaN(amount) || amount<1){ errEl.textContent = 'Введите сумму'; return; }
+    if(!spm){ errEl.textContent = 'SPWorlds недоступен, обновите страницу'; return; }
+    try{
+      const data = await api('POST', '/api/admin/deposits/miniapp', { amount });
+      errEl.textContent = '';
+      activeDepositId = data.depositId;
+
+      depStageAmount.style.display = 'none';
+      depStageWaiting.style.display = 'block';
+      document.getElementById('depWaitingText').textContent = 'Оплатите в открывшемся окне SPWorlds…';
+      spm.openPayment(data.code);
+      startDepositPolling(activeDepositId);
+    }catch(err){ errEl.textContent = err.message; }
+  });
+
+  // spwmini's docs use the (typo'd) event name "paymentReponse" in every
+  // example but the type definitions say "paymentResponse" — listening
+  // for both so this works regardless of which one spworlds actually
+  // sends. Fires once the player finishes (or cancels) the popup; the
+  // *actual* balance credit still comes from our webhook, detected by the
+  // status poll below — this just updates the waiting message.
+  function onPaymentResult(){
+    document.getElementById('depWaitingText').textContent = 'Проверяем оплату…';
+  }
+  ['paymentResponse', 'paymentReponse'].forEach(evt=>{
+    document.addEventListener(evt, onPaymentResult);
+  });
+  // spm itself is an EventEmitter-style object (see spwmini's README) —
+  // hook it directly too, in case the host only reaches it that way and
+  // never dispatches a DOM event.
+  function bindSpmPaymentEvents(){
+    if(!spm) return;
+    spm.on('paymentResponse', onPaymentResult);
+    spm.on('paymentReponse', onPaymentResult);
+    spm.on('paymentError', ()=>{ flashMessage('Ошибка оплаты, попробуйте снова'); });
+    spm.on('openPaymentError', (msg)=>{ flashMessage(msg || 'Ошибка оплаты'); });
+  }
+
+  function startDepositPolling(depositId){
+    stopDepPolling();
+    depPollInterval = setInterval(async ()=>{
+      try{
+        const s = await api('GET', `/api/admin/deposits/${depositId}/status`);
+        if(s.status === 'completed'){
+          stopDepPolling();
+          await loadMe();
+          depositModal.classList.remove('open');
+          flashMessage('Баланс пополнен!');
+        }else if(s.status === 'expired' || s.status === 'cancelled_admin' || s.status === 'cancelled_player'){
+          stopDepPolling();
+          if(s.status === 'expired'){
+            depositModal.classList.remove('open');
+            flashMessage('Заявка на пополнение истекла');
+          }
+        }
+      }catch(err){ /* transient network hiccup — keep polling */ }
+    }, 3000);
+  }
+
+  document.getElementById('depCancelBtn').addEventListener('click', async ()=>{
+    if(activeDepositId) await api('POST', `/api/admin/deposits/${activeDepositId}/cancel`).catch(()=>{});
+    stopDepPolling();
+    depositModal.classList.remove('open');
+  });
+
+  // ---------- Withdraw modal ----------
+  const withdrawModal = document.getElementById('withdrawModal');
+  const wdStageForm = document.getElementById('wdStageForm');
+  const wdStageWaiting = document.getElementById('wdStageWaiting');
+  document.getElementById('withdrawBtn').addEventListener('click', ()=>{
+    if(!requireLogin()) return;
+    document.getElementById('wdCard').value = '';
+    document.getElementById('wdAmount').value = '';
+    document.getElementById('wdErr').textContent = '';
+    wdStageForm.style.display = 'block';
+    wdStageWaiting.style.display = 'none';
+    withdrawModal.classList.add('open');
+  });
+  document.getElementById('withdrawClose').addEventListener('click', ()=>withdrawModal.classList.remove('open'));
+  withdrawModal.addEventListener('click', (e)=>{ if(e.target===withdrawModal) withdrawModal.classList.remove('open'); });
+
+  document.getElementById('wdSubmit').addEventListener('click', async ()=>{
+    const card = document.getElementById('wdCard').value.trim();
+    const amount = parseInt(document.getElementById('wdAmount').value, 10);
+    const errEl = document.getElementById('wdErr');
+    try{
+      // Payout is automatic now — by the time this resolves, the AR has
+      // actually been sent (or the whole request failed and the balance
+      // was never touched / was refunded server-side; see the catch
+      // below), there's no more "wait up to 24h for an admin" step.
+      await api('POST', '/api/admin/withdrawals', { card, amount });
+      errEl.textContent = '';
+      wdStageForm.style.display = 'none';
+      wdStageWaiting.style.display = 'block';
+      document.getElementById('wdWaitingText').textContent = 'Готово! АР отправлены на вашу карту.';
+      await loadMe();
+    }catch(err){ errEl.textContent = err.message; }
+  });
+
+  // ---------- History modal ----------
+  const historyModal = document.getElementById('historyModal');
+  document.getElementById('historyBtn').addEventListener('click', async ()=>{
+    if(!requireLogin()) return;
+    await renderPlayerHistory();
+    historyModal.querySelectorAll('.sub-tab').forEach(t=>t.classList.remove('active'));
+    historyModal.querySelectorAll('.sub-pane').forEach(p=>p.classList.remove('active'));
+    historyModal.querySelector('[data-sub="histWithdrawals"]').classList.add('active');
+    document.getElementById('histWithdrawals').classList.add('active');
+    historyModal.classList.add('open');
+  });
+  document.getElementById('historyClose').addEventListener('click', ()=>historyModal.classList.remove('open'));
+  historyModal.addEventListener('click', (e)=>{ if(e.target===historyModal) historyModal.classList.remove('open'); });
+
+  async function renderPlayerHistory(){
+    const { deposits, withdrawals } = await api('GET', '/api/admin/history');
+    const depEl = document.getElementById('historyDeposits');
+    depEl.innerHTML = deposits.length ? '' : '<div class="empty-note">Пополнений пока нет</div>';
+    deposits.sort((a,b)=>b.createdAt-a.createdAt).forEach(d=>{
+      const row = document.createElement('div');
+      row.className = 'history-row';
+      row.innerHTML = `<span>${d.amount.toLocaleString('ru-RU')}</span><span class="hs-status">${d.statusLabel}</span>`;
+      depEl.appendChild(row);
+    });
+    const wdEl = document.getElementById('historyWithdrawals');
+    wdEl.innerHTML = withdrawals.length ? '' : '<div class="empty-note">Выводов пока нет</div>';
+    withdrawals.sort((a,b)=>b.createdAt-a.createdAt).forEach(w=>{
+      const row = document.createElement('div');
+      row.className = 'history-row';
+      if(w.status==='pending'){
+        row.innerHTML = `<span>${w.amount.toLocaleString('ru-RU')}</span><span class="hs-status">${w.statusLabel}</span><button class="btn-red" data-wid="${w.id}">Отменить</button>`;
+      } else {
+        row.innerHTML = `<span>${w.amount.toLocaleString('ru-RU')}</span><span class="hs-status">${w.statusLabel}</span>`;
+      }
+      wdEl.appendChild(row);
+    });
+  }
+  document.getElementById('historyWithdrawals').addEventListener('click', async (e)=>{
+    const btn = e.target.closest('button[data-wid]');
+    if(!btn) return;
+    await api('POST', `/api/admin/withdrawals/${btn.dataset.wid}/cancel`);
+    await renderPlayerHistory();
+    await loadMe();
+  });
+
+  // ---------- Mines ----------
+  const minesStakeInput = document.getElementById('minesStakeInput');
+  const minesCountInput = document.getElementById('minesCountInput');
+  const minesStartBtn = document.getElementById('minesStartBtn');
+  const minesCashoutBtn = document.getElementById('minesCashoutBtn');
+  const minesGrid = document.getElementById('minesGrid');
+  const minesResultText = document.getElementById('minesResultText');
+  const minesMultiplierVal = document.getElementById('minesMultiplierVal');
+  const minesPotentialVal = document.getElementById('minesPotentialVal');
+
+  // ---------- Mines count: custom styled dropdown ----------
+  // Drives the hidden native <select id="minesCountInput"> so the rest of
+  // the Mines code (which reads/sets .value and .disabled) is unchanged.
+  const minesCountCustom = document.getElementById('minesCountCustom');
+  const minesCountBtn = document.getElementById('minesCountBtn');
+  const minesCountBtnVal = document.getElementById('minesCountBtnVal');
+  const minesCountPanel = document.getElementById('minesCountPanel');
+  const minesCountOpts = [];
+
+  for(let i=1;i<=24;i++){
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = i;
+    if(i===3) opt.selected = true;
+    minesCountInput.appendChild(opt);
+
+    const optBtn = document.createElement('button');
+    optBtn.type = 'button';
+    optBtn.className = 'mines-count-opt' + (i===3 ? ' selected' : '');
+    optBtn.textContent = i;
+    optBtn.addEventListener('click', ()=>{
+      if(minesCountInput.disabled) return;
+      minesCountInput.value = i;
+      minesSyncCountUI();
+      minesCountCustom.classList.remove('open');
+      Sound.click();
+      if(!minesActiveGame) minesUpdateStatsDisplay();
+    });
+    minesCountPanel.appendChild(optBtn);
+    minesCountOpts.push(optBtn);
+  }
+
+  function minesSyncCountUI(){
+    const v = parseInt(minesCountInput.value, 10);
+    minesCountBtnVal.textContent = v;
+    minesCountOpts.forEach((b,idx)=>b.classList.toggle('selected', idx+1===v));
+  }
+  minesSyncCountUI();
+
+  minesCountBtn.addEventListener('click', ()=>{
+    if(minesCountInput.disabled) return;
+    Sound.click();
+    minesCountCustom.classList.toggle('open');
+  });
+  document.addEventListener('click', (e)=>{
+    if(!minesCountCustom.contains(e.target)) minesCountCustom.classList.remove('open');
+  });
+  minesCountInput.addEventListener('change', ()=>{ if(!minesActiveGame) minesUpdateStatsDisplay(); });
+
+  function minesClampStake(){
+    let v = parseInt(minesStakeInput.value,10);
+    if(isNaN(v) || v<1) v = 1;
+    if(v>MINES_MAX_BET) v = MINES_MAX_BET;
+    minesStakeInput.value = v;
+    return v;
+  }
+  minesStakeInput.addEventListener('change', minesClampStake);
+  document.getElementById('minesMaxBtn').addEventListener('click', ()=>{
+    minesStakeInput.value = MINES_MAX_BET;
+    minesClampStake();
+    Sound.click();
+  });
+
+  let minesActiveGame = null; // { id, betAmount, minesCount, revealed, status, multiplier }
+  let minesTiles = [];
+  let minesRenderedRevealed = new Set(); // indices already painted as revealed — avoids replaying the flip animation on tiles that were already open
+  let minesRenderedMines = new Set();
+  let minesBusy = false; // true while a start/reveal/cashout request is in flight
+
+  // Mirrors src/mines.js multiplierFor() — used only to preview the
+  // progression line client-side. The server remains the sole authority
+  // on the actual payout when a tile is revealed or the game is cashed out.
+  const MINES_GRID_SIZE = 25;
+  const MINES_HOUSE_EDGE = 0.08;
+  function minesMultiplierFor(minesCount, safeCount){
+    if(safeCount <= 0) return 1;
+    let probability = 1;
+    for(let i=0;i<safeCount;i++){
+      probability *= (MINES_GRID_SIZE - minesCount - i) / (MINES_GRID_SIZE - i);
+    }
+    return (1/probability) * (1 - MINES_HOUSE_EDGE);
+  }
+
+  const minesProgressEl = document.getElementById('minesProgress');
+  const minesProgressViewportEl = document.getElementById('minesProgressViewport');
+  function minesRenderProgress(){
+    const minesCount = parseInt(minesCountInput.value, 10) || 1;
+    const totalSafe = MINES_GRID_SIZE - minesCount;
+    const revealedCount = (minesActiveGame && minesActiveGame.status === 'active') ? minesActiveGame.revealed.length : 0;
+    const nextStep = revealedCount + 1;
+
+    minesProgressEl.innerHTML = '';
+    for(let step=1; step<=totalSafe; step++){
+      const node = document.createElement('div');
+      node.className = 'mines-step';
+      if(step <= revealedCount) node.classList.add('done');
+      else if(step === nextStep) node.classList.add('next');
+      node.textContent = minesMultiplierFor(minesCount, step).toFixed(2) + 'x';
+      minesProgressEl.appendChild(node);
+    }
+
+    // Auto-page the strip (via transform, not native scroll) so the next
+    // step to reveal is always visible — centered where possible, clamped
+    // at the ends so we never scroll past the first/last step.
+    const VISIBLE = 5;
+    const cellSize = minesProgressViewportEl.clientWidth >= 352 ? 64 : 52;
+    const gap = 8;
+    let windowStart = Math.max(1, nextStep - 2);
+    windowStart = Math.min(windowStart, Math.max(1, totalSafe - VISIBLE + 1));
+    const offset = (windowStart - 1) * (cellSize + gap);
+    minesProgressEl.style.transform = `translateX(-${offset}px)`;
+  }
+
+  function minesBuildGrid(){
+    minesGrid.innerHTML = '';
+    minesTiles = [];
+    for(let i=0;i<25;i++){
+      const tile = document.createElement('button');
+      tile.className = 'mines-tile';
+      tile.dataset.idx = i;
+      tile.addEventListener('click', ()=>minesReveal(i));
+      minesGrid.appendChild(tile);
+      minesTiles.push(tile);
+    }
+  }
+  minesBuildGrid();
+  minesUpdateStatsDisplay();
+
+  function minesUpdateStatsDisplay(){
+    if(minesActiveGame && minesActiveGame.status === 'active'){
+      minesMultiplierVal.textContent = minesActiveGame.multiplier.toFixed(4) + 'x';
+      minesPotentialVal.textContent = fmtMoney(minesActiveGame.betAmount * minesActiveGame.multiplier);
+    } else {
+      minesMultiplierVal.textContent = '1.0000x';
+      minesPotentialVal.textContent = '0,00';
+    }
+    minesRenderProgress();
+  }
+
+  function minesSetPlayingUI(playing){
+    minesStakeInput.disabled = playing;
+    minesCountInput.disabled = playing;
+    minesCountBtn.disabled = playing;
+    if(playing) minesCountCustom.classList.remove('open');
+    document.getElementById('minesMaxBtn').style.display = playing ? 'none' : 'inline-block';
+    minesStartBtn.style.display = playing ? 'none' : 'inline-block';
+    minesCashoutBtn.style.display = playing ? 'inline-block' : 'none';
+  }
+
+  // Sets whether the grid accepts clicks right now — used both while a
+  // game isn't active and, crucially, while a reveal request is still in
+  // flight, so rapid clicking can't fire a pile of overlapping requests
+  // that arrive out of order and make the board look like it's stuttering.
+  function minesSetGridLocked(locked){
+    minesGrid.classList.toggle('grid-locked', locked);
+  }
+
+  // Full reset (new game started, or grid rebuilt) — clears everything and
+  // forgets what's already been painted.
+  function minesResetGridVisual(){
+    minesTiles.forEach(t=>{
+      t.classList.remove('revealed','mine-hit','mine-dim','disabled');
+      t.textContent = '';
+    });
+    minesRenderedRevealed = new Set();
+    minesRenderedMines = new Set();
+  }
+
+  // Incremental render: only touches tiles whose state actually changed
+  // since the last render, and only plays the flip animation on tiles that
+  // are newly revealed — this is what keeps clicking fast feeling smooth
+  // instead of every tile re-flipping on every server response.
+  function minesRenderRevealed(){
+    if(!minesActiveGame){
+      minesResetGridVisual();
+      return;
+    }
+
+    minesActiveGame.revealed.forEach(idx=>{
+      if(minesRenderedRevealed.has(idx)) return; // already painted, don't touch it
+      minesRenderedRevealed.add(idx);
+      const t = minesTiles[idx];
+      t.classList.add('revealed');
+      t.textContent = '💎';
+    });
+
+    if(minesActiveGame.status !== 'active'){
+      minesTiles.forEach(t=>t.classList.add('disabled'));
+      if(minesActiveGame.minePositions){
+        minesActiveGame.minePositions.forEach(idx=>{
+          if(minesRenderedMines.has(idx) || minesActiveGame.revealed.includes(idx)) return;
+          minesRenderedMines.add(idx);
+          const t = minesTiles[idx];
+          t.classList.add(minesActiveGame.status==='lost' ? 'mine-hit' : 'mine-dim');
+          t.textContent = '💣';
+        });
+      }
+    }
+  }
+
+  async function minesLoadState(){
+    try{
+      const data = await api('GET', '/api/mines/state');
+      minesResetGridVisual();
+      minesActiveGame = data.game;
+      if(minesActiveGame && minesActiveGame.status === 'active'){
+        minesStakeInput.value = minesActiveGame.betAmount;
+        minesCountInput.value = minesActiveGame.minesCount;
+        minesSyncCountUI();
+        minesSetPlayingUI(true);
+        minesResultText.textContent = 'Игра продолжается — откройте клетку или заберите выигрыш';
+      } else {
+        minesSetPlayingUI(false);
+      }
+      minesSetGridLocked(false);
+      minesRenderRevealed();
+      minesUpdateStatsDisplay();
+    }catch(err){ /* not logged in, etc — ignore */ }
+  }
+
+  minesStartBtn.addEventListener('click', async ()=>{
+    if(!requireLogin()) return;
+    if(minesBusy) return;
+    const betAmount = minesClampStake();
+    const minesCount = parseInt(minesCountInput.value, 10);
+    minesBusy = true;
+    minesSetGridLocked(true);
+    Sound.click();
+    try{
+      const data = await api('POST', '/api/mines/start', { betAmount, minesCount });
+      minesResetGridVisual();
+      minesActiveGame = data.game;
+      minesSetPlayingUI(true);
+      minesRenderRevealed();
+      minesUpdateStatsDisplay();
+      minesResultText.textContent = 'Выбирайте клетки — чем больше открыто, тем выше множитель';
+      await loadMe();
+    }catch(err){ flashMessage(err.message); }
+    finally{ minesBusy = false; minesSetGridLocked(false); }
+  });
+
+  async function minesReveal(idx){
+    if(minesBusy) return; // ignore extra clicks while a request is already in flight
+    if(!minesActiveGame || minesActiveGame.status !== 'active') return;
+    if(minesActiveGame.revealed.includes(idx)) return;
+    minesBusy = true;
+    minesSetGridLocked(true);
+    try{
+      const data = await api('POST', '/api/mines/reveal', { tileIndex: idx });
+      minesActiveGame = data;
+      minesRenderRevealed();
+      minesUpdateStatsDisplay();
+      if(data.hitMine){
+        minesSetPlayingUI(false);
+        minesResultText.textContent = 'Бум! Вы попали на мину — ставка потеряна.';
+        Sound.mineExplosion();
+      } else if(data.autoCashedOut){
+        minesSetPlayingUI(false);
+        minesResultText.textContent = `Все безопасные клетки открыты! Выплата: ${fmtMoney(data.winnings)}`;
+        showWinPopup(data.winnings, 'Мины');
+        Sound.win(data.winnings);
+      } else {
+        minesResultText.textContent = 'Открыто безопасно! Продолжайте или заберите выигрыш.';
+        Sound.mineSafe();
+      }
+      if(data.hitMine || data.autoCashedOut) await loadMe();
+    }catch(err){ flashMessage(err.message); }
+    finally{
+      minesBusy = false;
+      minesSetGridLocked(false);
+    }
+  }
+
+  minesCashoutBtn.addEventListener('click', async ()=>{
+    if(minesBusy) return;
+    minesBusy = true;
+    try{
+      const data = await api('POST', '/api/mines/cashout');
+      minesActiveGame = data;
+      minesRenderRevealed();
+      minesUpdateStatsDisplay();
+      minesSetPlayingUI(false);
+      minesResultText.textContent = `Забрано! Выплата: ${fmtMoney(data.winnings)}`;
+      showWinPopup(data.winnings, 'Мины');
+      Sound.cashout();
+      await loadMe();
+    }catch(err){ flashMessage(err.message); }
+    finally{ minesBusy = false; }
+  });
+
+  // ---------- Blackjack ----------
+  const bjStakeInput = document.getElementById('bjStakeInput');
+  const bjDealBtn = document.getElementById('bjDealBtn');
+  const bjHitBtn = document.getElementById('bjHitBtn');
+  const bjStandBtn = document.getElementById('bjStandBtn');
+  const bjDoubleBtn = document.getElementById('bjDoubleBtn');
+  const bjSplitBtn = document.getElementById('bjSplitBtn');
+  const bjResultText = document.getElementById('bjResultText');
+  const bjPlayerHandsRow = document.getElementById('bjPlayerHandsRow');
+  const bjDealerCardsEl = document.getElementById('bjDealerCards');
+  const bjDealerTotalEl = document.getElementById('bjDealerTotal');
+  const BJ_MAX_BET = 500;
+  let bjActiveGame = null;
+  let bjBusy = false;
+  let bjIdleResetTimer = null;
+
+  function bjClampStake(){
+    let v = parseInt(bjStakeInput.value,10);
+    if(isNaN(v) || v<1) v = 1;
+    if(v>BJ_MAX_BET) v = BJ_MAX_BET;
+    bjStakeInput.value = v;
+    return v;
+  }
+  bjStakeInput.addEventListener('change', bjClampStake);
+  document.getElementById('bjMaxBtn').addEventListener('click', ()=>{
+    bjStakeInput.value = BJ_MAX_BET;
+    bjClampStake();
+    Sound.click();
+  });
+
+  function bjRenderCardEl(card, faceDown){
+    const el = document.createElement('div');
+    if(faceDown){
+      el.className = 'bj-card back';
+      return el;
+    }
+    const isRed = card.suit === '♥' || card.suit === '♦';
+    el.className = 'bj-card ' + (isRed ? 'red' : 'black');
+    el.innerHTML = `${card.rank}<span style="font-size:29px;">${card.suit}</span>`;
+    return el;
+  }
+
+  function bjOutcomeShort(outcome){
+    if(outcome === 'blackjack') return 'Блэкджек!';
+    if(outcome === 'player_win') return 'Победа';
+    if(outcome === 'dealer_win') return 'Проигрыш';
+    if(outcome === 'push') return 'Ничья';
+    return '';
+  }
+
+  function bjOutcomeBadgeEl(outcome){
+    if(!outcome) return null;
+    const span = document.createElement('span');
+    const cls = (outcome==='blackjack' || outcome==='player_win') ? 'win' : outcome==='push' ? 'push' : 'lose';
+    span.className = 'bj-hand-outcome ' + cls;
+    span.textContent = bjOutcomeShort(outcome);
+    return span;
+  }
+
+  // Idle table look: 2 face-down cards per hand, shown on load / mode
+  // switch and again a few seconds after a hand resolves, matching how
+  // Baccarat's felt behaves between rounds.
+  function bjShowIdleBacks(){
+    bjPlayerHandsRow.innerHTML = '';
+    const handEl = document.createElement('div');
+    handEl.className = 'bj-hand';
+    const label = document.createElement('div');
+    label.className = 'bj-hand-label bj-label-player';
+    label.innerHTML = 'Игрок <span>—</span>';
+    const cardsEl = document.createElement('div');
+    cardsEl.className = 'bj-cards';
+    cardsEl.appendChild(bjRenderCardEl(null, true));
+    cardsEl.appendChild(bjRenderCardEl(null, true));
+    handEl.appendChild(label);
+    handEl.appendChild(cardsEl);
+    bjPlayerHandsRow.appendChild(handEl);
+
+    bjDealerCardsEl.innerHTML = '';
+    bjDealerCardsEl.appendChild(bjRenderCardEl(null, true));
+    bjDealerCardsEl.appendChild(bjRenderCardEl(null, true));
+    bjDealerTotalEl.textContent = '—';
+  }
+
+  function bjSetControls(state){
+    // state: 'idle' | 'active' | 'busy'
+    bjStakeInput.disabled = state !== 'idle';
+    document.getElementById('bjMaxBtn').style.display = state === 'idle' ? 'inline-block' : 'none';
+    bjDealBtn.style.display = state === 'idle' ? 'inline-block' : 'none';
+    const actions = (state === 'active' && bjActiveGame && bjActiveGame.actions) || {};
+    bjHitBtn.style.display = state === 'active' && actions.canHit ? 'inline-block' : 'none';
+    bjStandBtn.style.display = state === 'active' && actions.canStand ? 'inline-block' : 'none';
+    bjDoubleBtn.style.display = state === 'active' && actions.canDouble ? 'inline-block' : 'none';
+    bjSplitBtn.style.display = state === 'active' && actions.canSplit ? 'inline-block' : 'none';
+  }
+
+  // Renders every hand the player currently has (1, or 2 after a split),
+  // highlighting whichever one is next to act while the round is active.
+  // Renders just the player hands row. showBadges=false is used right
+  // after a hit/stand/double/split, before the dealer has played, so the
+  // player's own cards land immediately without spoiling the outcome via
+  // the win/lose badge ahead of the dealer's reveal.
+  function bjRenderPlayerHands(game, showBadges){
+    bjPlayerHandsRow.innerHTML = '';
+    game.playerHands.forEach((hand, idx)=>{
+      const handEl = document.createElement('div');
+      handEl.className = 'bj-hand' + (game.status==='active' && idx===game.activeHand ? ' active-hand' : '');
+
+      const label = document.createElement('div');
+      label.className = 'bj-hand-label bj-label-player';
+      const prefix = game.playerHands.length > 1 ? `Рука ${idx+1} ` : 'Игрок ';
+      label.innerHTML = `${prefix}<span>${hand.total}${hand.soft ? ' (мягкая)' : ''}</span>`;
+      handEl.appendChild(label);
+
+      const cardsEl = document.createElement('div');
+      cardsEl.className = 'bj-cards';
+      hand.cards.forEach(c=>cardsEl.appendChild(bjRenderCardEl(c, false)));
+      if(hand.total > 21 && cardsEl.lastElementChild) cardsEl.lastElementChild.classList.add('bust');
+      handEl.appendChild(cardsEl);
+
+      if(showBadges){
+        const badge = bjOutcomeBadgeEl(hand.outcome);
+        if(badge) handEl.appendChild(badge);
+      }
+
+      bjPlayerHandsRow.appendChild(handEl);
+    });
+  }
+
+  function bjRenderDealerCards(game){
+    bjDealerCardsEl.innerHTML = '';
+    game.dealerCards.forEach(c=>bjDealerCardsEl.appendChild(bjRenderCardEl(c, false)));
+    if(game.status === 'active') bjDealerCardsEl.appendChild(bjRenderCardEl(null, true));
+    bjDealerTotalEl.textContent = game.status === 'active' ? '?' : game.dealerTotal;
+  }
+
+  function bjRenderGame(){
+    bjRenderPlayerHands(bjActiveGame, true);
+    bjRenderDealerCards(bjActiveGame);
+  }
+
+  // Mirrors src/blackjack.js handValue() — used only to show a live running
+  // total on the player's hand while cards are still being dealt out.
+  function bjLocalHandValue(cards){
+    let total = 0, aces = 0;
+    cards.forEach(c=>{
+      if(c.rank==='A'){ total += 11; aces++; }
+      else if(c.rank==='10' || c.rank==='J' || c.rank==='Q' || c.rank==='K') total += 10;
+      else total += parseInt(c.rank,10);
+    });
+    while(total > 21 && aces > 0){ total -= 10; aces--; }
+    return total;
+  }
+
+  // Deals the opening hand with a bit of suspense, one card at a time in
+  // real casino order: player, dealer, player, dealer. The dealer's second
+  // card is dealt face-down (a "back" placeholder) unless the hand already
+  // resolved on the deal (natural blackjack/dealer blackjack), in which
+  // case the server has already sent its real value and it's flipped face
+  // up as the last step. Resolves once every card has landed.
+  function bjAnimateDeal(finalGame){
+    return new Promise(resolve=>{
+      const hand0 = finalGame.playerHands[0];
+      const dealerKnownCards = finalGame.dealerCards; // 1 card while active, 2 once resolved
+
+      bjPlayerHandsRow.innerHTML = '';
+      const handEl = document.createElement('div');
+      handEl.className = 'bj-hand active-hand';
+      const label = document.createElement('div');
+      label.className = 'bj-hand-label bj-label-player';
+      label.innerHTML = 'Игрок <span>—</span>';
+      const cardsEl = document.createElement('div');
+      cardsEl.className = 'bj-cards';
+      handEl.appendChild(label);
+      handEl.appendChild(cardsEl);
+      bjPlayerHandsRow.appendChild(handEl);
+
+      bjDealerCardsEl.innerHTML = '';
+      bjDealerTotalEl.textContent = '—';
+
+      const dealtPlayer = [];
+      const GAP = 450;
+
+      function step(fn, delay){ setTimeout(()=>{ fn(); Sound.cardDeal(); }, delay); }
+
+      step(()=>{
+        cardsEl.appendChild(bjRenderCardEl(hand0.cards[0], false));
+        dealtPlayer.push(hand0.cards[0]);
+        label.innerHTML = `Игрок <span>${bjLocalHandValue(dealtPlayer)}</span>`;
+      }, 0);
+
+      step(()=>{
+        bjDealerCardsEl.appendChild(bjRenderCardEl(dealerKnownCards[0], false));
+      }, GAP);
+
+      step(()=>{
+        cardsEl.appendChild(bjRenderCardEl(hand0.cards[1], false));
+        dealtPlayer.push(hand0.cards[1]);
+        label.innerHTML = `Игрок <span>${bjLocalHandValue(dealtPlayer)}</span>`;
+      }, GAP*2);
+
+      step(()=>{
+        if(finalGame.status !== 'active' && dealerKnownCards[1]){
+          bjDealerCardsEl.appendChild(bjRenderCardEl(dealerKnownCards[1], false));
+        } else {
+          bjDealerCardsEl.appendChild(bjRenderCardEl(null, true));
+        }
+      }, GAP*3);
+
+      setTimeout(resolve, GAP*3 + 400);
+    });
+  }
+
+  // After the player finishes acting on every hand, the dealer's hidden
+  // card is flipped and any further draws are dealt one at a time (same
+  // "intrigue" pacing as the opening deal) instead of all appearing at
+  // once. finalGame.dealerCards[0] is the card already showing; index 1
+  // is the previously face-down card; anything beyond that is a dealer
+  // hit. Player hands / outcome badges are left untouched here — they're
+  // drawn afterwards by the normal bjRenderGame() call in bjShowResult.
+  function bjAnimateDealerPlay(finalGame){
+    return new Promise(resolve=>{
+      const cards = finalGame.dealerCards;
+      const GAP = 500;
+      const revealed = [cards[0]];
+
+      function step(i, delay){
+        setTimeout(()=>{
+          const back = bjDealerCardsEl.querySelector('.bj-card.back');
+          if(back) back.remove();
+          bjDealerCardsEl.appendChild(bjRenderCardEl(cards[i], false));
+          revealed.push(cards[i]);
+          bjDealerTotalEl.textContent = bjLocalHandValue(revealed);
+          Sound.cardDeal();
+        }, delay);
+      }
+
+      for(let i=1;i<cards.length;i++) step(i, i*GAP);
+      setTimeout(resolve, Math.max(1,cards.length-1)*GAP + 350);
+    });
+  }
+
+  async function bjLoadState(){
+    try{
+      const data = await api('GET', '/api/blackjack/state');
+      bjActiveGame = data.game;
+      if(bjActiveGame && bjActiveGame.status === 'active'){
+        bjRenderGame();
+        bjSetControls('active');
+        bjResultText.textContent = 'Ходите: карта, сплит, удвоение или стоп';
+      } else {
+        bjShowIdleBacks();
+        bjSetControls('idle');
+      }
+    }catch(err){ bjShowIdleBacks(); bjSetControls('idle'); }
+  }
+
+  function bjShowResult(data){
+    bjActiveGame = data;
+    bjRenderGame();
+
+    const totalWinnings = data.playerHands.reduce((s,h)=>s+(h.winnings||0), 0);
+    const hasRealWin = data.playerHands.some(h=>h.outcome==='blackjack' || h.outcome==='player_win');
+    const summary = data.playerHands.length > 1
+      ? data.playerHands.map((h,i)=>`Рука ${i+1}: ${bjOutcomeShort(h.outcome)}`).join(', ')
+      : bjOutcomeShort(data.playerHands[0].outcome);
+
+    bjResultText.textContent = `${summary}. Дилер: ${data.dealerTotal ?? '—'}.` +
+      (totalWinnings > 0 ? ` Выплата: ${fmtMoney(totalWinnings)}` : ' Без выигрыша.');
+    if(hasRealWin && totalWinnings > 0){
+      showWinPopup(totalWinnings, 'Blackjack');
+    }
+    if(data.playerHands.some(h=>h.outcome==='blackjack')) Sound.blackjackWin();
+    else if(hasRealWin) Sound.win(totalWinnings);
+    else if(data.playerHands.some(h=>h.outcome==='dealer_win')) Sound.lose();
+    bjSetControls('idle');
+    loadMe();
+    bjIdleResetTimer = setTimeout(bjShowIdleBacks, 4000);
+  }
+
+  bjDealBtn.addEventListener('click', async ()=>{
+    if(bjBusy) return;
+    if(bjIdleResetTimer){ clearTimeout(bjIdleResetTimer); bjIdleResetTimer = null; }
+    if(!requireLogin()) return;
+    const betAmount = bjClampStake();
+    bjBusy = true;
+    bjSetControls('busy');
+    Sound.click();
+    try{
+      const data = await api('POST', '/api/blackjack/deal', { betAmount });
+      bjActiveGame = data.game;
+      await loadMe();
+      await bjAnimateDeal(bjActiveGame);
+      if(bjActiveGame.status !== 'active'){
+        bjShowResult(bjActiveGame);
+      } else {
+        bjRenderGame();
+        bjSetControls('active');
+        bjResultText.textContent = 'Ходите: карта, сплит, удвоение или стоп';
+      }
+    }catch(err){
+      flashMessage(err.message);
+      bjSetControls('idle');
+    } finally { bjBusy = false; }
+  });
+
+  bjHitBtn.addEventListener('click', async ()=>{
+    if(bjBusy) return;
+    bjBusy = true;
+    bjSetControls('busy');
+    try{
+      const data = await api('POST', '/api/blackjack/hit');
+      Sound.cardDeal();
+      if(data.status !== 'active'){
+        bjRenderPlayerHands(data, false);
+        await bjAnimateDealerPlay(data);
+        bjShowResult(data);
+      } else {
+        bjActiveGame = data;
+        bjRenderGame();
+        bjSetControls('active');
+      }
+    }catch(err){ flashMessage(err.message); bjSetControls('active'); }
+    finally { bjBusy = false; }
+  });
+
+  bjStandBtn.addEventListener('click', async ()=>{
+    if(bjBusy) return;
+    bjBusy = true;
+    bjSetControls('busy');
+    Sound.click();
+    try{
+      const data = await api('POST', '/api/blackjack/stand');
+      if(data.status !== 'active'){
+        bjRenderPlayerHands(data, false);
+        await bjAnimateDealerPlay(data);
+        bjShowResult(data);
+      } else {
+        bjActiveGame = data;
+        bjRenderGame();
+        bjSetControls('active');
+        bjResultText.textContent = 'Следующая рука: ходите картой или остановитесь';
+      }
+    }catch(err){ flashMessage(err.message); bjSetControls('active'); }
+    finally { bjBusy = false; }
+  });
+
+  bjDoubleBtn.addEventListener('click', async ()=>{
+    if(bjBusy) return;
+    bjBusy = true;
+    bjSetControls('busy');
+    try{
+      const data = await api('POST', '/api/blackjack/double');
+      Sound.cardDeal();
+      await loadMe();
+      if(data.status !== 'active'){
+        bjRenderPlayerHands(data, false);
+        await bjAnimateDealerPlay(data);
+        bjShowResult(data);
+      } else {
+        bjActiveGame = data;
+        bjRenderGame();
+        bjSetControls('active');
+        bjResultText.textContent = 'Следующая рука: ходите картой или остановитесь';
+      }
+    }catch(err){ flashMessage(err.message); bjSetControls('active'); }
+    finally { bjBusy = false; }
+  });
+
+  bjSplitBtn.addEventListener('click', async ()=>{
+    if(bjBusy) return;
+    bjBusy = true;
+    bjSetControls('busy');
+    try{
+      const data = await api('POST', '/api/blackjack/split');
+      Sound.cardDeal();
+      await loadMe();
+      if(data.status !== 'active'){
+        bjRenderPlayerHands(data, false);
+        await bjAnimateDealerPlay(data);
+        bjShowResult(data);
+      } else {
+        bjActiveGame = data;
+        bjRenderGame();
+        bjSetControls('active');
+        bjResultText.textContent = 'Рука разделена — ходите первой рукой';
+      }
+    }catch(err){ flashMessage(err.message); bjSetControls('active'); }
+    finally { bjBusy = false; }
+  });
+
+  bjShowIdleBacks();
+
+  // ---------- Mode sidebar ----------
+  const modeToast = document.getElementById('modeToast');
+  const rouletteGameEl = document.getElementById('rouletteGame');
+  const baccaratGameEl = document.getElementById('baccaratGame');
+  const minesGameEl = document.getElementById('minesGame');
+  const blackjackGameEl = document.getElementById('blackjackGame');
+  let modeToastTimer = null;
+  const REAL_MODES = ['roulette', 'baccarat', 'mines', 'blackjack'];
+  document.querySelectorAll('.mode-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      Sound.click();
+      if(REAL_MODES.includes(btn.dataset.mode)){
+        document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('active'));
+        btn.classList.add('active');
+        rouletteGameEl.style.display = btn.dataset.mode === 'roulette' ? 'contents' : 'none';
+        baccaratGameEl.style.display = btn.dataset.mode === 'baccarat' ? 'contents' : 'none';
+        minesGameEl.style.display = btn.dataset.mode === 'mines' ? 'contents' : 'none';
+        blackjackGameEl.style.display = btn.dataset.mode === 'blackjack' ? 'contents' : 'none';
+        if(btn.dataset.mode === 'mines') minesLoadState();
+        if(btn.dataset.mode === 'baccarat') baccShowIdleBacks();
+        if(btn.dataset.mode === 'blackjack') bjLoadState();
+        return;
+      }
+      modeToast.style.top = (btn.getBoundingClientRect().top + btn.offsetHeight/2) + 'px';
+      modeToast.style.transform = 'translateY(-50%) translateX(0)';
+      modeToast.classList.add('show');
+      if(modeToastTimer) clearTimeout(modeToastTimer);
+      modeToastTimer = setTimeout(()=>modeToast.classList.remove('show'), 1600);
+    });
+  });
+
+  // ---------- Init ----------
+  (async function init(){
+    setAuthStatus('Авторизация через SPWorlds…');
+    try{
+      await spwminiLogin();
+      bindSpmPaymentEvents();
+    }catch(err){
+      console.error('SPWorlds mini app auth failed:', err);
+      setAuthStatus(err.message || 'Ошибка авторизации SPWorlds', true);
+      return; // no session — nothing else can work without a logged-in user
+    }
+    await loadMe();
+    try{
+      const hist = await api('GET', '/api/game/history');
+      hist.slice().reverse().forEach(r=>addHistoryChip(r.number));
+    }catch(e){}
+    try{
+      const baccHist = await api('GET', '/api/baccarat/history');
+      baccHist.slice().reverse().forEach(r=>baccHistoryChip(r.outcome));
+    }catch(e){}
+  })();
+})();
+</script>
+</body>
+</html>
